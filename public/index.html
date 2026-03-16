@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI TRPG — 어둠의 여정</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="parchment-bg">
+    <div class="container">
+
+      <header>
+        <div class="ornament">✦ ✦ ✦</div>
+        <h1>어둠의 여정</h1>
+        <p class="subtitle">그대의 이야기가 여기에서 시작되리니...</p>
+        <div class="ornament">✦ ✦ ✦</div>
+      </header>
+
+      <div class="game-grid">
+
+        <!-- 내레이션 영역 -->
+        <section class="narrative-panel">
+          <h2>✦ 이야기</h2>
+          <div id="narrativeArea" class="narrative-area">
+            <p class="placeholder-text">첫 행동을 입력하여 여정을 시작하시오...</p>
+          </div>
+        </section>
+
+        <!-- 플레이어 상태 패널 -->
+        <aside class="status-panel">
+          <div class="status-section">
+            <h2>⚔ 모험가</h2>
+            <div class="stat-row">
+              <span class="stat-label">이름</span>
+              <span id="playerName" class="stat-value">여행자</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">HP</span>
+              <span id="hpText" class="stat-value">100 / 100</span>
+            </div>
+            <div class="hp-bar-wrap">
+              <div id="hpBar" class="hp-bar" style="width: 100%;"></div>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">위치</span>
+              <span id="locationText" class="stat-value location">안개 낀 마을 어귀</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">금화</span>
+              <span id="goldText" class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">챕터</span>
+              <span id="chapterText" class="stat-value">1</span>
+            </div>
+          </div>
+
+          <div class="status-section">
+            <h2>🎒 소지품</h2>
+            <ul id="inventoryList" class="inventory-list">
+              <li class="inventory-empty">소지품이 없습니다</li>
+            </ul>
+          </div>
+        </aside>
+
+      </div>
+
+      <!-- 입력 영역 -->
+      <div class="input-bar">
+        <input
+          id="actionInput"
+          type="text"
+          placeholder="행동을 입력하시오... (예: 북쪽 문을 연다, 상인과 대화한다)"
+          maxlength="200"
+          autocomplete="off"
+        />
+        <button id="sendBtn" onclick="sendAction()">
+          <span class="btn-icon">⚔</span> 행동
+        </button>
+      </div>
+
+      <!-- 로딩 오버레이 -->
+      <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="loading-content">
+          <div class="rune-spinner">☽ ✦ ☾</div>
+          <p>운명이 펼쳐지고 있으니 잠시 기다리시오...</p>
+        </div>
+      </div>
+
+      <!-- 에러 메시지 -->
+      <div id="errorMsg" class="error-msg" style="display:none;"></div>
+
+      <!-- 게임 오버 오버레이 -->
+      <div id="gameOverOverlay" class="game-over-overlay" style="display:none;">
+        <div class="game-over-content">
+          <div class="ornament">✦ ✦ ✦</div>
+          <h2>여정의 끝</h2>
+          <p id="gameOverMsg">그대의 이야기는 여기서 막을 내리노라...</p>
+          <button onclick="resetGame()">☽ 새로운 여정을 시작하리라</button>
+          <div class="ornament">✦ ✦ ✦</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

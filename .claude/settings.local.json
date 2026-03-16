@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(dir:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg /b 2>&1\")",
+      "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg /A 2>&1\")",
+      "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\")"
+    ],
+    "deny": [
+      "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\\\.env\")",
+      "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\node_modules\")"
+    ]
+  }
+}
