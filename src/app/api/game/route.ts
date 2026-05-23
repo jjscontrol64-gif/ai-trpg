@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { GameState, PlayerAction, GameResponse, ChoiceOption } from "@/lib/types";
 import { processAction, getAvailableDirections } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
 
-const client = new Anthropic();
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+
+type GeminiRole = "user" | "model";
+type GameNarrationData = {
+  narration: string;
+  choices: { label: string; text: string }[];
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,7 +50,7 @@ async function handleStartGame(playerName: string): Promise<NextResponse> {
   const systemPrompt = buildSystemPrompt(state);
   const userMessage = buildUserMessage(engineResult);
 
-  const narrationData = await callClaude(
+  const narrationData = await callGemini(
     systemPrompt,
     [{ role: "user", content: userMessage }]
   );
@@ -107,7 +112,7 @@ async function handlePlayerAction(
     { role: "user" as const, content: buildUserMessage(engineResult, choiceText) },
   ];
 
-  const narrationData = await callClaude(systemPrompt, messages);
+  const narrationData = await callGemini(systemPrompt, messages);
 
   newState.messageHistory.push(
     { role: "user", content: choiceText || engineResult.eventSummary },
@@ -136,19 +141,13 @@ async function handlePlayerAction(
   return NextResponse.json(response);
 }
 
-async function callClaude(
+async function callGemini(
   systemPrompt: string,
   messages: { role: "user" | "assistant"; content: string }[]
-): Promise<{ narration: string; choices: { label: string; text: string }[] }> {
-  const response = await client.messages.create({
-    model: ANTHROPIC_MODEL,
-    max_tokens: 1500,
-    system: systemPrompt,
-    messages,
+): Promise<GameNarrationData> {
+  const text = await generateGeminiText(systemPrompt, messages, {
+    responseMimeType: "application/json",
   });
-
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -162,22 +161,79 @@ async function callClaude(
   return {
     narration: text,
     choices: [
-      { label: "🧭 계속 탐험", text: "주위를 둘러본다" },
-      { label: "⚔️ 경계하며 전진", text: "무기를 꺼내들고 조심스럽게 전진한다" },
-      { label: "🔍 주변 탐색", text: "주변을 자세히 살핀다" },
+      { label: "계속 탐험", text: "주위를 둘러본다" },
+      { label: "경계하며 전진", text: "무기를 꺼내들고 조심스럽게 전진한다" },
+      { label: "주변 탐색", text: "주변을 자세히 살핀다" },
     ],
   };
 }
 
 function mapChoicesToActions(
-  claudeChoices: { label: string; text: string }[],
+  modelChoices: { label: string; text: string }[],
   availableActions: PlayerAction[]
 ): ChoiceOption[] {
-  return claudeChoices.slice(0, 3).map((choice, idx) => ({
+  return modelChoices.slice(0, 3).map((choice, idx) => ({
     label: choice.label,
     text: choice.text,
     action: availableActions[idx % availableActions.length] ?? availableActions[0],
   }));
+}
+
+async function generateGeminiText(
+  systemPrompt: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+  options?: { responseMimeType?: "application/json" | "text/plain" }
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const response = await fetch(
+    `${GEMINI_API_BASE_URL}/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: messages.map((message) => ({
+          role: toGeminiRole(message.role),
+          parts: [{ text: message.content }],
+        })),
+        generationConfig: {
+          maxOutputTokens: 1500,
+          temperature: 0.8,
+          responseMimeType: options?.responseMimeType ?? "text/plain",
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API request failed (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts
+    ?.map((part: { text?: string }) => part.text ?? "")
+    .join("");
+
+  if (!text) {
+    throw new Error("Gemini API returned empty response");
+  }
+
+  return text;
+}
+
+function toGeminiRole(role: "user" | "assistant"): GeminiRole {
+  return role === "assistant" ? "model" : "user";
 }
 
 async function getEndingNarration(
@@ -195,19 +251,11 @@ async function getEndingNarration(
 세션을 마친 피나·미나가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
-  const response = await client.messages.create({
-    model: ANTHROPIC_MODEL,
-    max_tokens: 1500,
-    system: systemPrompt,
-    messages: [
-      {
-        role: "user",
-        content: `전사: ${state.party.members[0].name}, 현재 ${state.party.floor}층. ${lastAction || ""}. 엔딩 나레이션을 해주세요. 텍스트만 반환하세요 (JSON 아님).`,
-      },
-    ],
-  });
+  return generateGeminiText(systemPrompt, [
+    {
+      role: "user",
+      content: `전사: ${state.party.members[0].name}, 현재 ${state.party.floor}층. ${lastAction || ""}. 엔딩 나레이션을 해주세요. 텍스트만 반환하세요 (JSON 아님).`,
+    },
+  ]);
 
-  return response.content[0].type === "text"
-    ? response.content[0].text
-    : "모험이 끝났다...";
 }

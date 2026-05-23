@@ -7,7 +7,7 @@
 | 프로젝트명 | AI TRPG (가제) |
 | 장르 | 텍스트 기반 AI 롤플레잉 게임 |
 | 플랫폼 | 웹 브라우저 (PC 우선) |
-| 핵심 기술 | Codex API (Anthropic) |
+| 핵심 기술 | Gemini API |
 | 개발 도구 | VS Code + Codex |
 | 배포 목표 | Vercel |
 
@@ -18,7 +18,7 @@
 ```
 Backend    : Node.js + Express 5 (server.js — Codex API 프록시)
 Frontend   : HTML / CSS / Vanilla JavaScript (프레임워크 없이 시작)
-AI         : Codex API (@anthropic-ai/sdk), 모델: Codex-sonnet-4-5
+AI         : Gemini API (REST), 모델: gemini-2.5-flash
 저장       : localStorage (DB 없이 브라우저 저장, 초기 버전)
 배포       : Vercel
 버전 관리  : Git + GitHub
@@ -96,7 +96,7 @@ POST /api/game  →  server.js (Express)
     ↓
 gameState + history를 시스템 프롬프트에 포함
     ↓
-Codex API 호출 (@anthropic-ai/sdk)
+Gemini API 호출 (REST)
     ↓
 JSON 파싱 → narration + newState 반환
     ↓
