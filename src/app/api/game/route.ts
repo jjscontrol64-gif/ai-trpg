@@ -7,6 +7,7 @@ import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
 
 const client = new Anthropic();
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
 
 export async function POST(req: NextRequest) {
   try {
@@ -140,7 +141,7 @@ async function callClaude(
   messages: { role: "user" | "assistant"; content: string }[]
 ): Promise<{ narration: string; choices: { label: string; text: string }[] }> {
   const response = await client.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+    model: ANTHROPIC_MODEL,
     max_tokens: 1500,
     system: systemPrompt,
     messages,
@@ -195,7 +196,7 @@ async function getEndingNarration(
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+    model: ANTHROPIC_MODEL,
     max_tokens: 1500,
     system: systemPrompt,
     messages: [
