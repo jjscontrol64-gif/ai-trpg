@@ -5,8 +5,8 @@ export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
   const [warrior, pina, mina] = party.members;
 
-  return `당신은 톨킨 풍 중세 판타지 세계의 게임 마스터(GM)입니다.
-자연스러운 한국어로, 고풍스럽고 서사적인 문체로 내레이션하세요.
+  return `당신은 클래식 왕도 JRPG 풍 중세 판타지 세계의 게임 마스터(GM)입니다.
+플레이어가 콘솔 RPG 게임의 주인공이 된 듯한 몰입감을 주는 것이 당신의 역할입니다.
 
 ## 등장 캐릭터
 - 전사 "${warrior.name}" (플레이어): 용맹한 전사. 파티의 리더.

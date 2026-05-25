@@ -105,7 +105,7 @@ export default function StartScreen({ onStart, loading }: StartScreenProps) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="예: 아르단"
+                placeholder="예: 다린"
                 maxLength={20}
                 className="w-full rounded-[1.2rem] border border-[color:var(--border-color)] bg-[color:var(--bg-panel-soft)] px-4 py-3 text-center text-lg outline-none transition focus:border-[color:var(--accent-gold)]"
                 style={{
