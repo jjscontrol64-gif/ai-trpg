@@ -1,4 +1,11 @@
 import { EquipItem, ConsumableItem, EquipSlot, StatType, ItemRarity, Equipment } from "./types";
+import { consumableDefinitions } from "./registry/generated";
+import {
+  createConsumableFromDefinition,
+  createEquipFromDefinition,
+  getRandomConsumableDefinition,
+  getRandomEquipDefinition,
+} from "./registry/game-registry";
 
 let itemCounter = 0;
 function nextId(): string {
@@ -87,47 +94,44 @@ export const equipTableByRarity = {
 };
 
 // 소모품
+function createConsumableById(id: string): ConsumableItem {
+  const definition = consumableDefinitions.find((item) => item.id === id);
+  if (!definition) {
+    throw new Error(`Consumable definition not found: ${id}`);
+  }
+  return createConsumableFromDefinition(definition);
+}
+
 export function healPotion(): ConsumableItem {
-  return createConsumable("회복물약", "common", { hpRestore: 3 });
+  return createConsumableById("heal-potion");
 }
 
 export function smokeBomb(): ConsumableItem {
-  return createConsumable("연막탄", "common", { autoFlee: true });
+  return createConsumableById("smoke-bomb");
 }
 
 export function superiorHealPotion(): ConsumableItem {
-  return createConsumable("상급 회복물약", "rare", { hpRestore: 5 });
+  return createConsumableById("superior-heal-potion");
 }
 
 export function manaPotion(): ConsumableItem {
-  return createConsumable("마나물약", "rare", { actionRestore: 1 });
+  return createConsumableById("mana-potion");
 }
 
 export function elixir(): ConsumableItem {
-  return createConsumable("엘릭서", "legendary", { hpRestore: 10 });
+  return createConsumableById("elixir");
 }
 
 export function saintTear(): ConsumableItem {
-  return createConsumable("성녀의 눈물", "legendary", { allHpRestore: 5 });
+  return createConsumableById("saint-tear");
 }
 
 export function getRandomEquip(rarity: ItemRarity, slot?: EquipSlot): EquipItem {
-  const table = equipTableByRarity[rarity];
-  const slots: EquipSlot[] = slot ? [slot] : ["head", "body", "weapon"];
-  const chosenSlot = slots[Math.floor(Math.random() * slots.length)];
-  const stats: StatType[] = ["str", "dex", "int"];
-  const chosenStat = stats[Math.floor(Math.random() * stats.length)];
-  return table[chosenSlot][chosenStat]();
+  return createEquipFromDefinition(getRandomEquipDefinition(rarity, slot));
 }
 
 export function getRandomConsumable(rarity: ItemRarity): ConsumableItem {
-  if (rarity === "common") {
-    return Math.random() < 0.5 ? healPotion() : smokeBomb();
-  }
-  if (rarity === "rare") {
-    return Math.random() < 0.5 ? superiorHealPotion() : manaPotion();
-  }
-  return Math.random() < 0.5 ? elixir() : saintTear();
+  return createConsumableFromDefinition(getRandomConsumableDefinition(rarity));
 }
 
 // 초기 장비 (보너스 없음)

@@ -4,32 +4,42 @@ import { processAction, getAvailableDirections } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
+import { createAIProvider } from "@/lib/ai";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-
-type GeminiRole = "user" | "model";
 type GameNarrationData = {
   narration: string;
   choices: { label: string; text: string }[];
 };
 
+const aiProvider = createAIProvider();
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { type } = body;
+    const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
 
     if (type === "start_game") {
-      return handleStartGame(body.playerName);
+      return handleStartGame(body.playerName, apiKey);
     }
 
     if (type === "player_action") {
-      return handlePlayerAction(body.gameState, body.action, body.choiceText);
+      return handlePlayerAction(body.gameState, body.action, body.choiceText, apiKey);
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
   } catch (error) {
     console.error("Game API error:", error);
+    if (isTemporaryAIProviderError(error)) {
+      return NextResponse.json(
+        {
+          error:
+            "AI provider is temporarily unavailable. Please try again shortly.",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -37,7 +47,19 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handleStartGame(playerName: string): Promise<NextResponse> {
+function isTemporaryAIProviderError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Gemini API request failed (429)") ||
+    error.message.includes("Gemini API request failed (503)") ||
+    error.message.includes('"status": "UNAVAILABLE"')
+  );
+}
+
+async function handleStartGame(
+  playerName: string,
+  apiKey?: string
+): Promise<NextResponse> {
   const state = createInitialState(playerName);
   const directions = getAvailableDirections(state);
 
@@ -50,9 +72,10 @@ async function handleStartGame(playerName: string): Promise<NextResponse> {
   const systemPrompt = buildSystemPrompt(state);
   const userMessage = buildUserMessage(engineResult);
 
-  const narrationData = await callGemini(
+  const narrationData = await generateNarrationData(
     systemPrompt,
-    [{ role: "user", content: userMessage }]
+    [{ role: "user", content: userMessage }],
+    apiKey
   );
 
   const choices = mapChoicesToActions(narrationData.choices, directions);
@@ -72,13 +95,14 @@ async function handleStartGame(playerName: string): Promise<NextResponse> {
 async function handlePlayerAction(
   gameState: GameState,
   action: PlayerAction,
-  choiceText?: string
+  choiceText?: string,
+  apiKey?: string
 ): Promise<NextResponse> {
   const engineResult = processAction(gameState, action);
   const { newState } = engineResult;
 
   if (newState.phase === "game_over") {
-    const endNarration = await getEndingNarration(newState, "defeat", choiceText);
+    const endNarration = await getEndingNarration(newState, "defeat", choiceText, apiKey);
     return NextResponse.json({
       narration: endNarration,
       eventSummary: engineResult.eventSummary,
@@ -90,7 +114,7 @@ async function handlePlayerAction(
   }
 
   if (newState.phase === "victory") {
-    const endNarration = await getEndingNarration(newState, "victory", choiceText);
+    const endNarration = await getEndingNarration(newState, "victory", choiceText, apiKey);
     return NextResponse.json({
       narration: endNarration,
       eventSummary: engineResult.eventSummary,
@@ -112,7 +136,7 @@ async function handlePlayerAction(
     { role: "user" as const, content: buildUserMessage(engineResult, choiceText) },
   ];
 
-  const narrationData = await callGemini(systemPrompt, messages);
+  const narrationData = await generateNarrationData(systemPrompt, messages, apiKey);
 
   newState.messageHistory.push(
     { role: "user", content: choiceText || engineResult.eventSummary },
@@ -141,31 +165,141 @@ async function handlePlayerAction(
   return NextResponse.json(response);
 }
 
-async function callGemini(
+async function generateNarrationData(
   systemPrompt: string,
-  messages: { role: "user" | "assistant"; content: string }[]
+  messages: { role: "user" | "assistant"; content: string }[],
+  apiKey?: string
 ): Promise<GameNarrationData> {
-  const text = await generateGeminiText(systemPrompt, messages, {
+  const text = await aiProvider.generateText(systemPrompt, messages, {
+    apiKey,
     responseMimeType: "application/json",
   });
 
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  } catch {
-    // JSON 파싱 실패 시 텍스트 그대로 반환
+  const parsed = parseNarrationData(text);
+  if (parsed) {
+    return parsed;
   }
 
   return {
-    narration: text,
-    choices: [
-      { label: "계속 탐험", text: "주위를 둘러본다" },
-      { label: "경계하며 전진", text: "무기를 꺼내들고 조심스럽게 전진한다" },
-      { label: "주변 탐색", text: "주변을 자세히 살핀다" },
-    ],
+    narration: normalizeNarrationText(text),
+    choices: fallbackChoices(),
   };
+}
+
+function parseNarrationData(text: string): GameNarrationData | null {
+  const jsonText = extractJsonObject(text);
+
+  if (jsonText) {
+    try {
+      const parsed = JSON.parse(jsonText) as Partial<GameNarrationData>;
+      if (typeof parsed.narration === "string") {
+        return {
+          narration: normalizeNarrationText(parsed.narration),
+          choices: normalizeChoices(parsed.choices),
+        };
+      }
+    } catch {
+      // Fall through to partial JSON recovery.
+    }
+  }
+
+  const partialNarration = extractPartialJsonString(text, "narration");
+  if (partialNarration) {
+    return {
+      narration: normalizeNarrationText(partialNarration),
+      choices: fallbackChoices(),
+    };
+  }
+
+  return null;
+}
+
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  return text.slice(start, end + 1);
+}
+
+function extractPartialJsonString(text: string, key: string): string | null {
+  const keyIndex = text.indexOf('"' + key + '"');
+  if (keyIndex < 0) return null;
+
+  const colonIndex = text.indexOf(":", keyIndex);
+  if (colonIndex < 0) return null;
+
+  const quoteIndex = text.indexOf('"', colonIndex + 1);
+  if (quoteIndex < 0) return null;
+
+  let value = "";
+  let escaped = false;
+
+  for (let index = quoteIndex + 1; index < text.length; index++) {
+    const char = text[index];
+
+    if (escaped) {
+      value += "\\" + char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      break;
+    }
+
+    value += char;
+  }
+
+  return decodeJsonStringValue(value);
+}
+
+function decodeJsonStringValue(value: string): string {
+  const safeValue = value.endsWith("\\") ? value.slice(0, -1) : value;
+
+  try {
+    return JSON.parse('"' + safeValue.replace(/"/g, '\\"') + '"');
+  } catch {
+    return safeValue;
+  }
+}
+
+function normalizeNarrationText(text: string): string {
+  return text
+    .replace(/^\s*\{?\s*"narration"\s*:\s*"?/, "")
+    .replace(/",?\s*"choices"[\s\S]*$/, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .trim();
+}
+
+function normalizeChoices(
+  choices: GameNarrationData["choices"] | undefined
+): GameNarrationData["choices"] {
+  if (!Array.isArray(choices) || choices.length === 0) {
+    return fallbackChoices();
+  }
+
+  const normalized = choices
+    .filter(
+      (choice) =>
+        typeof choice?.label === "string" && typeof choice?.text === "string"
+    )
+    .slice(0, 3);
+
+  return normalized.length > 0 ? normalized : fallbackChoices();
+}
+
+function fallbackChoices(): GameNarrationData["choices"] {
+  return [
+    { label: "\uacc4\uc18d \ud0d0\ud5d8", text: "\uc8fc\uc704\ub97c \ub458\ub7ec\ubcf8\ub2e4" },
+    { label: "\uc870\uc2ec\ud788 \uc804\uc9c4", text: "\ubb34\uae30\ub97c \uc900\ube44\ud558\uace0 \ucc9c\ucc9c\ud788 \uc804\uc9c4\ud55c\ub2e4" },
+    { label: "\uc8fc\ubcc0 \ud0d0\uc0c9", text: "\uc8fc\ubcc0\uc744 \uc790\uc138\ud788 \uc0b4\ud540\ub2e4" },
+  ];
 }
 
 function mapChoicesToActions(
@@ -179,67 +313,11 @@ function mapChoicesToActions(
   }));
 }
 
-async function generateGeminiText(
-  systemPrompt: string,
-  messages: { role: "user" | "assistant"; content: string }[],
-  options?: { responseMimeType?: "application/json" | "text/plain" }
-): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured");
-  }
-
-  const response = await fetch(
-    `${GEMINI_API_BASE_URL}/models/${GEMINI_MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemPrompt }],
-        },
-        contents: messages.map((message) => ({
-          role: toGeminiRole(message.role),
-          parts: [{ text: message.content }],
-        })),
-        generationConfig: {
-          maxOutputTokens: 1500,
-          temperature: 0.8,
-          responseMimeType: options?.responseMimeType ?? "text/plain",
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API request failed (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts
-    ?.map((part: { text?: string }) => part.text ?? "")
-    .join("");
-
-  if (!text) {
-    throw new Error("Gemini API returned empty response");
-  }
-
-  return text;
-}
-
-function toGeminiRole(role: "user" | "assistant"): GeminiRole {
-  return role === "assistant" ? "model" : "user";
-}
-
 async function getEndingNarration(
   state: GameState,
   type: "victory" | "defeat",
-  lastAction?: string
+  lastAction?: string,
+  apiKey?: string
 ): Promise<string> {
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
@@ -251,11 +329,11 @@ async function getEndingNarration(
 세션을 마친 피나·미나가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
-  return generateGeminiText(systemPrompt, [
+  return aiProvider.generateText(systemPrompt, [
     {
       role: "user",
       content: `전사: ${state.party.members[0].name}, 현재 ${state.party.floor}층. ${lastAction || ""}. 엔딩 나레이션을 해주세요. 텍스트만 반환하세요 (JSON 아님).`,
     },
-  ]);
+  ], { apiKey });
 
 }

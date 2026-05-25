@@ -37,7 +37,16 @@ async function postGame<T>(payload: unknown): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`게임 API 호출 실패 (${response.status})`);
+    let message = `Game API request failed (${response.status})`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) {
+        message = body.error;
+      }
+    } catch {
+      // Keep status-based fallback when the response body is not JSON.
+    }
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
@@ -81,6 +90,7 @@ export default function HomePage() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [playerName, setPlayerName] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -97,16 +107,18 @@ export default function HomePage() {
       | undefined;
   }, [beats]);
 
-  const handleStart = (name: string) => {
+  const handleStart = (name: string, apiKey: string) => {
     startTransition(async () => {
       try {
         setError(null);
         const response = await postGame<GameResponse>({
           type: "start_game",
           playerName: name,
+          apiKey,
         });
 
         setPlayerName(name);
+        setGeminiApiKey(apiKey);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
@@ -146,6 +158,7 @@ export default function HomePage() {
           gameState,
           action: choice.action,
           choiceText: choice.text,
+          apiKey: geminiApiKey,
         });
 
         setGameState(response.gameState);
@@ -253,7 +266,7 @@ export default function HomePage() {
                         <div className="text-[0.68rem] uppercase tracking-[0.22em]" style={{ color: "var(--text-muted)" }}>
                           GM Narration
                         </div>
-                        <p className="story-copy mt-3">{beat.narration}</p>
+                        <p className="story-copy mt-3 whitespace-pre-line">{beat.narration}</p>
                         {!beat.diceResult ? (
                           <div className="story-summary">{beat.eventSummary}</div>
                         ) : null}

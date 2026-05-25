@@ -3,16 +3,19 @@
 import { useState } from "react";
 
 interface StartScreenProps {
-  onStart: (name: string) => void;
+  onStart: (name: string, geminiApiKey: string) => void;
   loading: boolean;
 }
 
 export default function StartScreen({ onStart, loading }: StartScreenProps) {
   const [name, setName] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) onStart(name.trim());
+    if (name.trim() && geminiApiKey.trim()) {
+      onStart(name.trim(), geminiApiKey.trim());
+    }
   };
 
   return (
@@ -112,15 +115,41 @@ export default function StartScreen({ onStart, loading }: StartScreenProps) {
                 disabled={loading}
               />
             </div>
+            <div>
+              <label
+                htmlFor="gemini-api-key"
+                className="mb-2 block text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Gemini API Key
+              </label>
+              <input
+                id="gemini-api-key"
+                type="password"
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+                placeholder="AIza..."
+                className="w-full rounded-[1.2rem] border border-[color:var(--border-color)] bg-[color:var(--bg-panel-soft)] px-4 py-3 text-center text-sm outline-none transition focus:border-[color:var(--accent-gold)]"
+                style={{
+                  color: "var(--text-primary)",
+                }}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={loading}
+              />
+              <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
+                Key is kept only in memory for this session and is sent to the server only for Gemini API calls.
+              </p>
+            </div>
             <button
               type="submit"
-              disabled={!name.trim() || loading}
+              disabled={!name.trim() || !geminiApiKey.trim() || loading}
               className="w-full rounded-[1.2rem] px-4 py-3 text-lg font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
               style={{
-                background: name.trim()
+                background: name.trim() && geminiApiKey.trim()
                   ? "linear-gradient(135deg, var(--accent-gold), #f6d28d)"
                   : "var(--bg-panel-soft)",
-                color: name.trim() ? "#1a1207" : "var(--text-muted)",
+                color: name.trim() && geminiApiKey.trim() ? "#1a1207" : "var(--text-muted)",
               }}
             >
               {loading ? "던전 진입 중..." : "던전에 입장하다"}

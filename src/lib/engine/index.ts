@@ -3,6 +3,8 @@ import {
   PlayerAction,
   EngineResult,
   ConsumableItem,
+  RoomData,
+  RoomType,
 } from "../types";
 import { performDiceCheck } from "./dice";
 import {
@@ -28,37 +30,70 @@ import {
   elixir,
 } from "../items";
 import { floorEntrance } from "../dungeon-data";
+import { itemEffectsById } from "../registry/game-registry";
+
+type ActionHandlerMap = {
+  [K in PlayerAction["type"]]: (
+    state: GameState,
+    action: Extract<PlayerAction, { type: K }>
+  ) => EngineResult;
+};
+
+const actionHandlers = {
+  move: (state, action) => processMove(state, action.direction),
+  attack: (state, action) =>
+    processCombatAttack(state, action.characterIndex, action.useInspiration),
+  special_action: (state, action) =>
+    processCombatSpecial(state, action.characterIndex, action.actionName),
+  flee: (state, action) => processCombatFlee(state, action.useSmokeBomb),
+  use_item: (state, action) =>
+    processUseItem(state, action.itemId, action.targetIndex),
+  rest: (state) => processRest(state),
+  puzzle_attempt: (state, action) => processPuzzle(state, action),
+  trap_attempt: (state, action) => processTrap(state, action),
+  npc_interact: (state) => processNpc(state),
+  pathfinding: (state) => processPathfinding(state),
+  alchemy: (state) => processAlchemy(state),
+} satisfies ActionHandlerMap;
+
+type RoomHandlerContext = {
+  col: string;
+  row: number;
+  room: RoomData;
+};
+
+type RoomHandler = (
+  state: GameState,
+  context: RoomHandlerContext
+) => EngineResult;
+
+type RoomHandlerMap = {
+  [K in RoomType]: RoomHandler;
+};
+
+const roomHandlers = {
+  monster: handleMonsterRoom,
+  boss: handleBossRoom,
+  safe: handleSafeRoom,
+  treasure: handleTreasureRoom,
+  puzzle: handlePuzzleRoom,
+  trap: handleTrapRoom,
+  npc: handleNpcRoom,
+  entrance: handleDefaultRoom,
+  empty: handleDefaultRoom,
+  wall: handleDefaultRoom,
+} satisfies RoomHandlerMap;
 
 export function processAction(
   state: GameState,
   action: PlayerAction
 ): EngineResult {
-  switch (action.type) {
-    case "move":
-      return processMove(state, action.direction);
-    case "attack":
-      return processCombatAttack(state, action.characterIndex, action.useInspiration);
-    case "special_action":
-      return processCombatSpecial(state, action.characterIndex, action.actionName);
-    case "flee":
-      return processCombatFlee(state, action.useSmokeBomb);
-    case "use_item":
-      return processUseItem(state, action.itemId, action.targetIndex);
-    case "rest":
-      return processRest(state);
-    case "puzzle_attempt":
-      return processPuzzle(state, action);
-    case "trap_attempt":
-      return processTrap(state, action);
-    case "npc_interact":
-      return processNpc(state);
-    case "pathfinding":
-      return processPathfinding(state);
-    case "alchemy":
-      return processAlchemy(state);
-    default:
-      return { newState: state, eventSummary: "알 수 없는 행동.", nextActions: [] };
-  }
+  const handler = actionHandlers[action.type] as (
+    state: GameState,
+    action: PlayerAction
+  ) => EngineResult;
+
+  return handler(state, action);
 }
 
 function processMove(
@@ -96,93 +131,128 @@ function processMove(
     };
   }
 
-  switch (room.type) {
-    case "monster": {
-      const monster = spawnMonster(room.monsterDifficulty!);
-      const combatState = initCombat(s, monster);
-      return {
-        newState: combatState,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 👹 ${monster.name}(HP:${monster.hp}) 출현!`,
-        nextActions: getCombatActions(combatState),
-      };
-    }
-    case "boss": {
-      const boss = spawnBoss(s.party.floor);
-      const combatState = initCombat(s, boss);
-      return {
-        newState: combatState,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 💀 보스 ${boss.name}(HP:${boss.hp}) 출현!`,
-        nextActions: getCombatActions(combatState),
-      };
-    }
-    case "safe": {
-      for (const member of s.party.members) {
-        if (member.hp > 0) {
-          member.hp = Math.min(member.maxHp, member.hp + 5);
-        }
-      }
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. ⛺ 안전지대. 전원 HP +5 회복.`,
-        nextActions: getAvailableDirections(s),
-      };
-    }
-    case "treasure": {
-      s.phase = "event";
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 🎁 보물의 방 발견! 보물 상자가 있다.`,
-        nextActions: [
-          {
-            type: "puzzle_attempt",
-            characterIndex: 0,
-            stat: "str",
-            useInspiration: false,
-            isUnorthodox: false,
-          },
-        ],
-      };
-    }
-    case "puzzle": {
-      s.phase = "event";
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 🗝️ 수수께끼의 방. 난관이 앞을 가로막는다.`,
-        nextActions: buildPuzzleActions(s),
-      };
-    }
-    case "trap": {
-      s.phase = "event";
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 🕸️ 함정의 방. 위험한 기운이 감돈다.`,
-        nextActions: buildTrapActions(s),
-      };
-    }
-    case "npc": {
-      if (s.npcUsed) {
-        return {
-          newState: s,
-          eventSummary: `${newPos.col}${newPos.row}로 이동. 린린이 있던 자리. 이미 떠났다.`,
-          nextActions: getAvailableDirections(s),
-        };
-      }
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동. 🧙‍♂️ NPC 린린을 만났다!`,
-        nextActions: [{ type: "npc_interact" }],
-      };
-    }
-    case "entrance":
-    case "empty":
-    default: {
-      return {
-        newState: s,
-        eventSummary: `${newPos.col}${newPos.row}로 이동.`,
-        nextActions: getAvailableDirections(s),
-      };
+  return roomHandlers[room.type](s, {
+    col: newPos.col,
+    row: newPos.row,
+    room,
+  });
+}
+
+function handleMonsterRoom(
+  state: GameState,
+  { col, row, room }: RoomHandlerContext
+): EngineResult {
+  const monster = spawnMonster(room.monsterDifficulty!);
+  const combatState = initCombat(state, monster);
+  return {
+    newState: combatState,
+    eventSummary: `${col}${row}로 이동. 👹 ${monster.name}(HP:${monster.hp}) 출현!`,
+    nextActions: getCombatActions(combatState),
+  };
+}
+
+function handleBossRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  const boss = spawnBoss(state.party.floor);
+  const combatState = initCombat(state, boss);
+  return {
+    newState: combatState,
+    eventSummary: `${col}${row}로 이동. 💀 보스 ${boss.name}(HP:${boss.hp}) 출현!`,
+    nextActions: getCombatActions(combatState),
+  };
+}
+
+function handleSafeRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  for (const member of state.party.members) {
+    if (member.hp > 0) {
+      member.hp = Math.min(member.maxHp, member.hp + 5);
     }
   }
+
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동. ⛺ 안전지대. 전원 HP +5 회복.`,
+    nextActions: getAvailableDirections(state),
+  };
+}
+
+function handleTreasureRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  state.phase = "event";
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동. 🎁 보물의 방 발견! 보물 상자가 있다.`,
+    nextActions: [
+      {
+        type: "puzzle_attempt",
+        characterIndex: 0,
+        stat: "str",
+        useInspiration: false,
+        isUnorthodox: false,
+      },
+    ],
+  };
+}
+
+function handlePuzzleRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  state.phase = "event";
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동. 🗝️ 수수께끼의 방. 난관이 앞을 가로막는다.`,
+    nextActions: buildPuzzleActions(state),
+  };
+}
+
+function handleTrapRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  state.phase = "event";
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동. 🕸️ 함정의 방. 위험한 기운이 감돈다.`,
+    nextActions: buildTrapActions(state),
+  };
+}
+
+function handleNpcRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  if (state.npcUsed) {
+    return {
+      newState: state,
+      eventSummary: `${col}${row}로 이동. 린린이 있던 자리. 이미 떠났다.`,
+      nextActions: getAvailableDirections(state),
+    };
+  }
+
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동. 🧙‍♂️ NPC 린린을 만났다!`,
+    nextActions: [{ type: "npc_interact" }],
+  };
+}
+
+function handleDefaultRoom(
+  state: GameState,
+  { col, row }: RoomHandlerContext
+): EngineResult {
+  return {
+    newState: state,
+    eventSummary: `${col}${row}로 이동.`,
+    nextActions: getAvailableDirections(state),
+  };
 }
 
 function processCombatAttack(
@@ -245,6 +315,29 @@ function processUseItem(
 
   const item = s.party.inventory[itemIdx];
   s.party.inventory.splice(itemIdx, 1);
+
+  if (item.effectId) {
+    const effect = itemEffectsById[item.effectId];
+    if (!effect) {
+      return {
+        newState: s,
+        eventSummary: `Item effect not found: ${item.effectId}`,
+        nextActions: s.combat.active ? getCombatActions(s) : getAvailableDirections(s),
+      };
+    }
+
+    const getNextActions = (nextState: GameState) =>
+      nextState.combat.active
+        ? getCombatActions(nextState)
+        : getAvailableDirections(nextState);
+    const result = effect.apply({ state: s, item, targetIndex, getNextActions });
+    return {
+      newState: result.state,
+      eventSummary: result.eventSummary,
+      nextActions: result.nextActions,
+    };
+  }
+
   let summary = "";
 
   if (item.hpRestore) {

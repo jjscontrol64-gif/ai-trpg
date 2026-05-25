@@ -6,7 +6,7 @@ import {
   PlayerAction,
 } from "../types";
 import { performDiceCheck, rollD36 } from "./dice";
-import { monstersByDifficulty, bosses } from "../dungeon-data";
+import { bossesByFloor, monstersByDifficulty } from "../registry/game-registry";
 
 export function spawnMonster(difficulty: 1 | 2 | 3): MonsterState {
   const pool = monstersByDifficulty[difficulty];
@@ -21,7 +21,7 @@ export function spawnMonster(difficulty: 1 | 2 | 3): MonsterState {
 }
 
 export function spawnBoss(floor: 1 | 2 | 3): MonsterState {
-  const template = bosses[floor];
+  const template = bossesByFloor[floor];
   return {
     name: template.name,
     hp: template.hp,
@@ -355,7 +355,7 @@ export function getCombatActions(state: GameState): PlayerAction[] {
   }
 
   const usableItems = state.party.inventory.filter(
-    (i) => i.hpRestore || i.allHpRestore || i.actionRestore
+    (i) => i.effectId || i.hpRestore || i.allHpRestore || i.actionRestore
   );
   for (const item of usableItems) {
     actions.push({ type: "use_item", itemId: item.id });

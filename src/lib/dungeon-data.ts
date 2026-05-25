@@ -1,4 +1,5 @@
 import { DungeonMap, RoomData } from "./types";
+export { roomTypeEmoji } from "./registry/game-registry";
 
 function r(type: RoomData["type"], monsterDifficulty?: 1 | 2 | 3): RoomData {
   return { type, monsterDifficulty, visited: false };
@@ -161,56 +162,11 @@ export const floorSize: Record<number, { cols: string[]; rows: number[] }> = {
   3: { cols: ["A", "B", "C", "D", "E", "F", "G"], rows: [1, 2, 3, 4, 5, 6, 7] },
 };
 
-export const roomTypeEmoji: Record<string, string> = {
-  monster: "👹",
-  puzzle: "🗝️",
-  treasure: "🎁",
-  trap: "🕸️",
-  safe: "⛺",
-  wall: "🧱",
-  npc: "🧙‍♂️",
-  boss: "💀",
-  empty: "–",
-  entrance: "🚪",
-};
-
-export interface MonsterTemplate {
-  name: string;
-  hp: number;
-  difficulty: 1 | 2 | 3;
-}
-
-export const monstersByDifficulty: Record<number, MonsterTemplate[]> = {
-  1: [
-    { name: "고블린", hp: 3, difficulty: 1 },
-    { name: "거대거미", hp: 4, difficulty: 1 },
-    { name: "슬라임", hp: 4, difficulty: 1 },
-    { name: "스켈레톤", hp: 7, difficulty: 1 },
-  ],
-  2: [
-    { name: "오거", hp: 11, difficulty: 2 },
-    { name: "와이번", hp: 10, difficulty: 2 },
-    { name: "가고일", hp: 13, difficulty: 2 },
-    { name: "구울", hp: 9, difficulty: 2 },
-  ],
-  3: [
-    { name: "미노타우르스", hp: 14, difficulty: 3 },
-    { name: "트롤", hp: 20, difficulty: 3 },
-    { name: "와이트", hp: 17, difficulty: 3 },
-    { name: "골렘", hp: 22, difficulty: 3 },
-    { name: "키메라", hp: 16, difficulty: 3 },
-  ],
-};
-
-export interface BossTemplate {
-  name: string;
-  hp: number;
-  damage: number;
-  floor: 1 | 2 | 3;
-}
-
-export const bosses: Record<number, BossTemplate> = {
-  1: { name: "리치", hp: 25, damage: 1, floor: 1 },
-  2: { name: "발록", hp: 28, damage: 2, floor: 2 },
-  3: { name: "레드드래곤", hp: 30, damage: 3, floor: 3 },
-};
+export type {
+  MonsterDefinition as MonsterTemplate,
+  BossDefinition as BossTemplate,
+} from "./registry/types";
+export {
+  monstersByDifficulty,
+  bossesByFloor as bosses,
+} from "./registry/game-registry";

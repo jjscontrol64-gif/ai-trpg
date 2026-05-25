@@ -33,6 +33,8 @@ export interface ConsumableItem {
   id: string;
   name: string;
   rarity: ItemRarity;
+  effectId?: string;
+  effectValue?: number;
   hpRestore?: number;
   allHpRestore?: number;
   actionRestore?: number;
