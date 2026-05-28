@@ -87,6 +87,7 @@ export default function HomePage() {
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -130,7 +131,8 @@ export default function HomePage() {
         });
 
         setPlayerName(name);
-        setGeminiApiKey(apiKey);
+        setGeminiApiKey("");
+        setApiKeySessionId(response.apiKeySessionId ?? "");
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
@@ -155,6 +157,7 @@ export default function HomePage() {
     setError(null);
     setPlayerName(savedSnapshot.playerName);
     setGeminiApiKey(apiKey);
+    setApiKeySessionId("");
     setGameState(savedSnapshot.gameState);
     setStatusWindow(buildStatusWindow(savedSnapshot.gameState));
     setCurrentChoices(savedSnapshot.currentChoices);
@@ -208,9 +211,12 @@ export default function HomePage() {
           gameState,
           action: choice.action,
           choiceText: choice.text,
-          apiKey: geminiApiKey,
+          apiKeySessionId,
+          apiKey: apiKeySessionId ? undefined : geminiApiKey,
         });
 
+        setGeminiApiKey("");
+        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);

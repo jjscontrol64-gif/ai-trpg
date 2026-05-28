@@ -11,25 +11,52 @@ type GameNarrationData = {
   choices: { label: string; text: string }[];
 };
 
+type ApiKeySession = {
+  apiKey: string;
+  expiresAt: number;
+};
+
+type ResolvedApiKey = {
+  apiKey: string;
+  apiKeySessionId: string;
+};
+
 const aiProvider = createAIProvider();
+const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
+const apiKeySessions = new Map<string, ApiKeySession>();
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { type } = body;
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    const apiKeySessionId =
+      typeof body.apiKeySessionId === "string" ? body.apiKeySessionId : "";
+    const resolvedApiKey = resolveApiKey(apiKey, apiKeySessionId);
 
     if (type === "start_game") {
-      return handleStartGame(body.playerName, apiKey);
+      return handleStartGame(body.playerName, resolvedApiKey);
     }
 
     if (type === "player_action") {
-      return handlePlayerAction(body.gameState, body.action, body.choiceText, apiKey);
+      return handlePlayerAction(
+        body.gameState,
+        body.action,
+        body.choiceText,
+        resolvedApiKey
+      );
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
   } catch (error) {
     console.error("Game API error:", error);
+    if (isMissingApiKeyError(error)) {
+      return NextResponse.json(
+        { error: "Gemini API key is required." },
+        { status: 400 }
+      );
+    }
+
     if (isTemporaryAIProviderError(error)) {
       return NextResponse.json(
         {
@@ -47,18 +74,70 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function resolveApiKey(apiKey: string, apiKeySessionId: string): ResolvedApiKey {
+  if (apiKey) {
+    return {
+      apiKey,
+      apiKeySessionId: createApiKeySession(apiKey),
+    };
+  }
+
+  if (apiKeySessionId) {
+    const session = apiKeySessions.get(apiKeySessionId);
+    if (session && session.expiresAt > Date.now()) {
+      session.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+      return {
+        apiKey: session.apiKey,
+        apiKeySessionId,
+      };
+    }
+
+    apiKeySessions.delete(apiKeySessionId);
+  }
+
+  return {
+    apiKey: "",
+    apiKeySessionId: "",
+  };
+}
+
+function createApiKeySession(apiKey: string): string {
+  pruneExpiredApiKeySessions();
+  const sessionId = crypto.randomUUID();
+  apiKeySessions.set(sessionId, {
+    apiKey,
+    expiresAt: Date.now() + API_KEY_SESSION_TTL_MS,
+  });
+  return sessionId;
+}
+
+function pruneExpiredApiKeySessions(): void {
+  const now = Date.now();
+  for (const [sessionId, session] of apiKeySessions) {
+    if (session.expiresAt <= now) {
+      apiKeySessions.delete(sessionId);
+    }
+  }
+}
+
+function isMissingApiKeyError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message === "Gemini API key is required for this request"
+  );
+}
+
 function isTemporaryAIProviderError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes("Gemini API request failed (429)") ||
-    error.message.includes("Gemini API request failed (503)") ||
-    error.message.includes('"status": "UNAVAILABLE"')
+    error.message.includes("Gemini API request failed (503)")
   );
 }
 
 async function handleStartGame(
   playerName: string,
-  apiKey?: string
+  resolvedApiKey: ResolvedApiKey
 ): Promise<NextResponse> {
   const state = createInitialState(playerName);
   const directions = getAvailableDirections(state);
@@ -75,7 +154,7 @@ async function handleStartGame(
   const narrationData = await generateNarrationData(
     systemPrompt,
     [{ role: "user", content: userMessage }],
-    apiKey
+    resolvedApiKey.apiKey
   );
 
   const choices = mapChoicesToActions(narrationData.choices, directions);
@@ -87,6 +166,7 @@ async function handleStartGame(
     choices,
     gameState: state,
     statusWindow,
+    apiKeySessionId: resolvedApiKey.apiKeySessionId,
   };
 
   return NextResponse.json(response);
@@ -96,8 +176,10 @@ async function handlePlayerAction(
   gameState: GameState,
   action: PlayerAction,
   choiceText?: string,
-  apiKey?: string
+  resolvedApiKey?: ResolvedApiKey
 ): Promise<NextResponse> {
+  const apiKey = resolvedApiKey?.apiKey;
+  const apiKeySessionId = resolvedApiKey?.apiKeySessionId;
   const engineResult = processAction(gameState, action);
   const { newState } = engineResult;
 
@@ -110,6 +192,7 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
+      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -122,6 +205,7 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
+      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -160,6 +244,7 @@ async function handlePlayerAction(
     choices,
     gameState: newState,
     statusWindow,
+    apiKeySessionId,
   };
 
   return NextResponse.json(response);

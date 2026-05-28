@@ -12,7 +12,9 @@
       "Bash(cd:*)",
       "Bash(find:*)",
       "Bash(rm:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [
       "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\\\.env\")",

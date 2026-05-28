@@ -17,10 +17,10 @@ export class GeminiProvider implements AIProvider {
       responseMimeType?: AIResponseMimeType;
     }
   ): Promise<string> {
-    const apiKey = options?.apiKey || process.env.GEMINI_API_KEY;
+    const apiKey = options?.apiKey?.trim();
 
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured");
+      throw new Error("Gemini API key is required for this request");
     }
 
     const requestBody = JSON.stringify({
@@ -37,8 +37,6 @@ export class GeminiProvider implements AIProvider {
         responseMimeType: options?.responseMimeType ?? "text/plain",
       },
     });
-
-    let lastErrorText = "";
 
     for (let attempt = 0; attempt <= MAX_RETRY_COUNT; attempt++) {
       const response = await fetch(
@@ -66,8 +64,6 @@ export class GeminiProvider implements AIProvider {
         return text;
       }
 
-      lastErrorText = await response.text();
-
       if (
         attempt < MAX_RETRY_COUNT &&
         RETRYABLE_STATUS_CODES.has(response.status)
@@ -76,12 +72,10 @@ export class GeminiProvider implements AIProvider {
         continue;
       }
 
-      throw new Error(
-        `Gemini API request failed (${response.status}): ${lastErrorText}`
-      );
+      throw new Error(`Gemini API request failed (${response.status})`);
     }
 
-    throw new Error(`Gemini API request failed: ${lastErrorText}`);
+    throw new Error("Gemini API request failed");
   }
 }
 
