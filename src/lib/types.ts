@@ -123,6 +123,20 @@ export interface DiceRollResult {
   isUnorthodox: boolean;
 }
 
+export type StoryBeat =
+  | {
+      id: string;
+      role: "assistant";
+      narration: string;
+      eventSummary: string;
+      diceResult?: DiceRollResult;
+    }
+  | {
+      id: string;
+      role: "user";
+      text: string;
+    };
+
 export interface ChoiceOption {
   label: string;
   text: string;

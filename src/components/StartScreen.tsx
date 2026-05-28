@@ -4,10 +4,19 @@ import { useState } from "react";
 
 interface StartScreenProps {
   onStart: (name: string, geminiApiKey: string) => void;
+  onResume: (geminiApiKey: string) => void;
   loading: boolean;
+  hasSave: boolean;
+  savedPlayerName?: string;
 }
 
-export default function StartScreen({ onStart, loading }: StartScreenProps) {
+export default function StartScreen({
+  onStart,
+  onResume,
+  loading,
+  hasSave,
+  savedPlayerName,
+}: StartScreenProps) {
   const [name, setName] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
 
@@ -60,6 +69,35 @@ export default function StartScreen({ onStart, loading }: StartScreenProps) {
         </section>
 
         <aside className="panel-shell">
+          {hasSave ? (
+            <div
+              className="mb-6 rounded-[1.5rem] border border-[color:rgba(191,143,74,0.28)] bg-black/10 p-5 text-left text-sm"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <p className="panel-kicker">Saved Expedition</p>
+              <div className="mt-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+                {savedPlayerName ?? "Adventurer"}
+              </div>
+              <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
+                Enter a Gemini API key to continue. The key is not saved.
+              </p>
+              <button
+                type="button"
+                onClick={() => onResume(geminiApiKey.trim())}
+                disabled={!geminiApiKey.trim() || loading}
+                className="mt-4 w-full rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
+                style={{
+                  background: geminiApiKey.trim()
+                    ? "linear-gradient(135deg, var(--accent-gold), #f6d28d)"
+                    : "var(--bg-panel-soft)",
+                  color: geminiApiKey.trim() ? "#1a1207" : "var(--text-muted)",
+                }}
+              >
+                {loading ? "Loading..." : "Continue"}
+              </button>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <p className="panel-kicker">Start Expedition</p>
             <h2 className="panel-title">전사의 이름</h2>

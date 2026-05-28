@@ -11,21 +11,17 @@ import {
   GameResponse,
   GameState,
   StatusWindowData,
+  StoryBeat,
 } from "@/lib/types";
+import { buildStatusWindow } from "@/lib/status";
+import {
+  createStorageProvider,
+  SAVE_SCHEMA_VERSION,
+  SaveSnapshot,
+} from "@/lib/storage";
 
-type StoryBeat =
-  | {
-      id: string;
-      role: "assistant";
-      narration: string;
-      eventSummary: string;
-      diceResult?: DiceRollResult;
-    }
-  | {
-      id: string;
-      role: "user";
-      text: string;
-    };
+const storageProvider = createStorageProvider();
+const DEFAULT_SAVE_ID = "default";
 
 async function postGame<T>(payload: unknown): Promise<T> {
   const response = await fetch("/api/game", {
@@ -91,7 +87,23 @@ export default function HomePage() {
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const logRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    storageProvider.load(DEFAULT_SAVE_ID).then((snapshot) => {
+      if (!cancelled) {
+        setSavedSnapshot(snapshot);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!logRef.current) return;
@@ -133,6 +145,44 @@ export default function HomePage() {
         ]);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "게임 시작에 실패했습니다.");
+      }
+    });
+  };
+
+  const handleResume = (apiKey: string) => {
+    if (!savedSnapshot) return;
+
+    setError(null);
+    setPlayerName(savedSnapshot.playerName);
+    setGeminiApiKey(apiKey);
+    setGameState(savedSnapshot.gameState);
+    setStatusWindow(buildStatusWindow(savedSnapshot.gameState));
+    setCurrentChoices(savedSnapshot.currentChoices);
+    setBeats(savedSnapshot.beats);
+  };
+
+  const handleSave = () => {
+    if (!gameState || !playerName) return;
+
+    startTransition(async () => {
+      try {
+        setSaveStatus("idle");
+        const snapshot: SaveSnapshot = {
+          schemaVersion: SAVE_SCHEMA_VERSION,
+          saveId: DEFAULT_SAVE_ID,
+          playerName,
+          gameState,
+          beats,
+          currentChoices,
+          savedAt: new Date().toISOString(),
+        };
+
+        await storageProvider.save(snapshot);
+        setSavedSnapshot(snapshot);
+        setSaveStatus("saved");
+        window.setTimeout(() => setSaveStatus("idle"), 1800);
+      } catch {
+        setSaveStatus("error");
       }
     });
   };
@@ -181,7 +231,15 @@ export default function HomePage() {
   };
 
   if (!gameState || !statusWindow) {
-    return <StartScreen onStart={handleStart} loading={isPending} />;
+    return (
+      <StartScreen
+        onStart={handleStart}
+        onResume={handleResume}
+        loading={isPending}
+        hasSave={Boolean(savedSnapshot)}
+        savedPlayerName={savedSnapshot?.playerName}
+      />
+    );
   }
 
   return (
@@ -217,6 +275,19 @@ export default function HomePage() {
                   {pill}
                 </span>
               ))}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isPending}
+                className="rounded-full border border-white/8 bg-black/15 px-4 py-2 text-xs tracking-[0.14em] transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {saveStatus === "saved"
+                  ? "Saved"
+                  : saveStatus === "error"
+                    ? "Save failed"
+                    : "Save"}
+              </button>
             </div>
           </div>
         </header>
