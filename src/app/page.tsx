@@ -22,6 +22,7 @@ import {
 
 const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
+type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 
 async function postGame<T>(payload: unknown): Promise<T> {
   const response = await fetch("/api/game", {
@@ -83,6 +84,10 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [beats, setBeats] = useState<StoryBeat[]>([]);
   const [currentChoices, setCurrentChoices] = useState<ChoiceOption[]>([]);
+  const [choiceSubmitStatus, setChoiceSubmitStatus] =
+    useState<ChoiceSubmitStatus>("idle");
+  const [lastSubmittedChoice, setLastSubmittedChoice] =
+    useState<ChoiceOption | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [playerName, setPlayerName] = useState("");
@@ -136,6 +141,8 @@ export default function HomePage() {
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
+        setChoiceSubmitStatus("idle");
+        setLastSubmittedChoice(null);
         setBeats([
           {
             id: createId(),
@@ -155,6 +162,8 @@ export default function HomePage() {
     if (!savedSnapshot) return;
 
     setError(null);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
     setPlayerName(savedSnapshot.playerName);
     setGeminiApiKey(apiKey);
     setApiKeySessionId("");
@@ -190,21 +199,24 @@ export default function HomePage() {
     });
   };
 
-  const handleChoice = (choice: ChoiceOption) => {
-    if (!gameState) return;
+  const handleChoice = (choice: ChoiceOption, appendUserBeat = true) => {
+    if (!gameState || choiceSubmitStatus === "submitting") return;
 
+    setChoiceSubmitStatus("submitting");
+    setLastSubmittedChoice(choice);
     startTransition(async () => {
       try {
         setError(null);
-        setCurrentChoices([]);
-        setBeats((prev) => [
-          ...prev,
-          {
-            id: createId(),
-            role: "user",
-            text: choice.label,
-          },
-        ]);
+        if (appendUserBeat) {
+          setBeats((prev) => [
+            ...prev,
+            {
+              id: createId(),
+              role: "user",
+              text: choice.label,
+            },
+          ]);
+        }
 
         const response = await postGame<GameResponse>({
           type: "player_action",
@@ -220,6 +232,8 @@ export default function HomePage() {
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
+        setChoiceSubmitStatus("idle");
+        setLastSubmittedChoice(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -231,9 +245,15 @@ export default function HomePage() {
           },
         ]);
       } catch (caught) {
+        setChoiceSubmitStatus("failed");
         setError(caught instanceof Error ? caught.message : "행동 처리에 실패했습니다.");
       }
     });
+  };
+
+  const handleRetryChoice = () => {
+    if (!lastSubmittedChoice || choiceSubmitStatus !== "failed") return;
+    handleChoice(lastSubmittedChoice, false);
   };
 
   if (!gameState || !statusWindow) {
@@ -372,8 +392,20 @@ export default function HomePage() {
                     choice2={currentChoices[1]}
                     choice3={currentChoices[2]}
                     onSelect={handleChoice}
-                    disabled={isPending}
+                    disabled={choiceSubmitStatus === "submitting"}
                   />
+                  {/* <button
+                    type="button"
+                    onClick={handleRetryChoice}
+                    disabled={
+                      choiceSubmitStatus !== "failed" ||
+                      !lastSubmittedChoice
+                    }
+                    className="mt-3 rounded-full border border-white/8 bg-black/15 px-4 py-2 text-xs tracking-[0.14em] transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    다시 시도
+                  </button> */}
                 </div>
               ) : (
                 <div className="mt-5 rounded-[1.35rem] border border-white/6 bg-black/10 px-4 py-4 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
@@ -381,7 +413,7 @@ export default function HomePage() {
                     ? "레드드래곤을 쓰러뜨렸습니다. 정복 엔딩이 출력된 상태입니다."
                     : gameState.phase === "game_over"
                       ? "파티가 전멸했습니다. 패배 엔딩이 출력된 상태입니다."
-                      : isPending
+                      : choiceSubmitStatus === "submitting"
                         ? "다음 선택지를 생성하고 있습니다."
                         : latestAssistantBeat?.eventSummary ?? "선택 가능한 행동이 없습니다."}
                 </div>
