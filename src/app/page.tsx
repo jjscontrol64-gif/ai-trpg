@@ -24,6 +24,25 @@ const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 
+interface GameSnapshot {
+  gameState: GameState;
+  statusWindow: StatusWindowData;
+  beats: StoryBeat[];
+  currentChoices: ChoiceOption[];
+}
+
+function createGameSnapshot(snapshot: GameSnapshot): GameSnapshot {
+  return {
+    ...snapshot,
+    beats: [...snapshot.beats],
+    currentChoices: [...snapshot.currentChoices],
+  };
+}
+
+function restoreGameSnapshot(snapshot: GameSnapshot): GameSnapshot {
+  return createGameSnapshot(snapshot);
+}
+
 async function postGame<T>(payload: unknown): Promise<T> {
   const response = await fetch("/api/game", {
     method: "POST",
@@ -90,6 +109,7 @@ export default function HomePage() {
     useState<ChoiceOption | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
+  const [previousSnapshot, setPreviousSnapshot] = useState<GameSnapshot | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [apiKeySessionId, setApiKeySessionId] = useState("");
@@ -143,6 +163,7 @@ export default function HomePage() {
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
         setLastSubmittedChoice(null);
+        setPreviousSnapshot(null);
         setBeats([
           {
             id: createId(),
@@ -164,6 +185,7 @@ export default function HomePage() {
     setError(null);
     setChoiceSubmitStatus("idle");
     setLastSubmittedChoice(null);
+    setPreviousSnapshot(null);
     setPlayerName(savedSnapshot.playerName);
     setGeminiApiKey(apiKey);
     setApiKeySessionId("");
@@ -199,9 +221,23 @@ export default function HomePage() {
     });
   };
 
-  const handleChoice = (choice: ChoiceOption, appendUserBeat = true) => {
-    if (!gameState || choiceSubmitStatus === "submitting") return;
+  const handleChoice = (
+    choice: ChoiceOption,
+    appendUserBeat = true,
+    updateHistory = true
+  ) => {
+    if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
 
+    if (updateHistory) {
+      setPreviousSnapshot(
+        createGameSnapshot({
+          gameState,
+          statusWindow,
+          beats,
+          currentChoices,
+        })
+      );
+    }
     setChoiceSubmitStatus("submitting");
     setLastSubmittedChoice(choice);
     startTransition(async () => {
@@ -253,7 +289,21 @@ export default function HomePage() {
 
   const handleRetryChoice = () => {
     if (!lastSubmittedChoice || choiceSubmitStatus !== "failed") return;
-    handleChoice(lastSubmittedChoice, false);
+    handleChoice(lastSubmittedChoice, false, false);
+  };
+
+  const handleBack = () => {
+    if (!previousSnapshot || choiceSubmitStatus === "submitting") return;
+
+    const snapshot = restoreGameSnapshot(previousSnapshot);
+    setGameState(snapshot.gameState);
+    setStatusWindow(snapshot.statusWindow);
+    setBeats(snapshot.beats);
+    setCurrentChoices(snapshot.currentChoices);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
+    setPreviousSnapshot(null);
+    setError(null);
   };
 
   if (!gameState || !statusWindow) {
@@ -313,6 +363,15 @@ export default function HomePage() {
                   : saveStatus === "error"
                     ? "Save failed"
                     : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={!previousSnapshot || choiceSubmitStatus === "submitting"}
+                className="rounded-full border border-white/8 bg-black/15 px-4 py-2 text-xs tracking-[0.14em] transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                뒤로가기
               </button>
             </div>
           </div>
