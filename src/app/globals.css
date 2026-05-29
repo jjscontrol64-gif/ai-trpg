@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #090b10;
-  --bg-secondary: #10151f;
-  --bg-card: rgba(18, 22, 31, 0.78);
+  /* 눈 피로 완화 — 순수 검정에서 소프트 차콜로 한 단계 밝게 */
+  --bg-primary: #16181d;
+  --bg-secondary: #1c1f26;
+  --bg-card: rgba(33, 37, 46, 0.78);
   --bg-card-hover: rgba(26, 32, 45, 0.95);
   --bg-panel-soft: rgba(255, 255, 255, 0.04);
   --text-primary: #f3ead8;
@@ -31,7 +32,7 @@ body {
   background:
     radial-gradient(circle at top, rgba(215, 172, 97, 0.14), transparent 30%),
     radial-gradient(circle at bottom right, rgba(53, 94, 166, 0.14), transparent 24%),
-    linear-gradient(180deg, #0b0f17 0%, #090b10 50%, #06080d 100%);
+    linear-gradient(180deg, #1a1d23 0%, #16181d 50%, #121419 100%);
   color: var(--text-primary);
   font-family: "Pretendard Variable", "Noto Sans KR", "Segoe UI", sans-serif;
   letter-spacing: -0.01em;
