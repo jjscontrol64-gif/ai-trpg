@@ -10,6 +10,7 @@ import {
   DiceRollResult,
   GameResponse,
   GameState,
+  PlayerAction,
   StatusWindowData,
   StoryBeat,
 } from "@/lib/types";
@@ -41,6 +42,34 @@ function createGameSnapshot(snapshot: GameSnapshot): GameSnapshot {
 
 function restoreGameSnapshot(snapshot: GameSnapshot): GameSnapshot {
   return createGameSnapshot(snapshot);
+}
+
+function canApplyInspiration(action: PlayerAction): action is Extract<
+  PlayerAction,
+  { type: "attack" | "puzzle_attempt" | "trap_attempt" }
+> {
+  return (
+    action.type === "attack" ||
+    action.type === "puzzle_attempt" ||
+    action.type === "trap_attempt"
+  );
+}
+
+function applyInspirationToChoice(
+  choice: ChoiceOption,
+  shouldUseInspiration: boolean
+): ChoiceOption {
+  if (!shouldUseInspiration || !canApplyInspiration(choice.action)) {
+    return choice;
+  }
+
+  return {
+    ...choice,
+    action: {
+      ...choice.action,
+      useInspiration: true,
+    },
+  };
 }
 
 async function postGame<T>(payload: unknown): Promise<T> {
@@ -115,6 +144,7 @@ export default function HomePage() {
   const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [inspirationArmed, setInspirationArmed] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -138,6 +168,12 @@ export default function HomePage() {
       behavior: "smooth",
     });
   }, [beats, isPending]);
+
+  useEffect(() => {
+    if (!gameState || gameState.party.inspiration <= 0) {
+      setInspirationArmed(false);
+    }
+  }, [gameState]);
 
   const latestAssistantBeat = useMemo(() => {
     return [...beats].reverse().find((beat) => beat.role === "assistant") as
@@ -164,6 +200,7 @@ export default function HomePage() {
         setChoiceSubmitStatus("idle");
         setLastSubmittedChoice(null);
         setPreviousSnapshot(null);
+        setInspirationArmed(false);
         setBeats([
           {
             id: createId(),
@@ -193,6 +230,7 @@ export default function HomePage() {
     setStatusWindow(buildStatusWindow(savedSnapshot.gameState));
     setCurrentChoices(savedSnapshot.currentChoices);
     setBeats(savedSnapshot.beats);
+    setInspirationArmed(false);
   };
 
   const handleSave = () => {
@@ -228,6 +266,11 @@ export default function HomePage() {
   ) => {
     if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
 
+    const submittedChoice = applyInspirationToChoice(
+      choice,
+      inspirationArmed && gameState.party.inspiration > 0
+    );
+
     if (updateHistory) {
       setPreviousSnapshot(
         createGameSnapshot({
@@ -239,7 +282,8 @@ export default function HomePage() {
       );
     }
     setChoiceSubmitStatus("submitting");
-    setLastSubmittedChoice(choice);
+    setLastSubmittedChoice(submittedChoice);
+    setInspirationArmed(false);
     startTransition(async () => {
       try {
         setError(null);
@@ -249,7 +293,7 @@ export default function HomePage() {
             {
               id: createId(),
               role: "user",
-              text: choice.label,
+              text: submittedChoice.label,
             },
           ]);
         }
@@ -257,8 +301,8 @@ export default function HomePage() {
         const response = await postGame<GameResponse>({
           type: "player_action",
           gameState,
-          action: choice.action,
-          choiceText: choice.text,
+          action: submittedChoice.action,
+          choiceText: submittedChoice.text,
           apiKeySessionId,
           apiKey: apiKeySessionId ? undefined : geminiApiKey,
         });
@@ -303,6 +347,7 @@ export default function HomePage() {
     setChoiceSubmitStatus("idle");
     setLastSubmittedChoice(null);
     setPreviousSnapshot(null);
+    setInspirationArmed(false);
     setError(null);
   };
 
@@ -439,9 +484,40 @@ export default function HomePage() {
                   <p className="panel-kicker">TRPG Choice</p>
                   <h2 className="panel-title">행동 선택</h2>
                 </div>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  나레이션과 상태창 사이에 배치
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    ★ {gameState.party.inspiration}/3
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={inspirationArmed}
+                    onClick={() => setInspirationArmed((armed) => !armed)}
+                    disabled={choiceSubmitStatus === "submitting"}
+                    className="inline-flex h-9 min-w-[7.75rem] items-center justify-between gap-2 rounded-full border border-white/8 bg-black/15 px-3 text-xs font-semibold transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    style={{
+                      color: inspirationArmed ? "#1a1207" : "var(--text-secondary)",
+                      background: inspirationArmed
+                        ? "linear-gradient(135deg, var(--accent-gold), #f6d28d)"
+                        : "rgba(0, 0, 0, 0.15)",
+                    }}
+                  >
+                    <span>영감</span>
+                    <span
+                      className="inline-flex h-5 w-9 items-center rounded-full border border-white/10 bg-black/20 p-0.5"
+                      aria-hidden="true"
+                    >
+                      <span
+                        className="h-4 w-4 rounded-full bg-current transition-transform"
+                        style={{
+                          transform: inspirationArmed
+                            ? "translateX(1rem)"
+                            : "translateX(0)",
+                        }}
+                      />
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {currentChoices.length > 0 ? (

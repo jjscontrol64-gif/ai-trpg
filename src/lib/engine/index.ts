@@ -391,14 +391,17 @@ function processPuzzle(
     // 활로개척 가능하지만 여기서는 일반 판정
   }
 
-  if (action.useInspiration && s.party.inspiration > 0) {
+  const effectiveUseInspiration =
+    action.useInspiration && s.party.inspiration > 0;
+
+  if (effectiveUseInspiration) {
     s.party.inspiration = Math.max(0, s.party.inspiration - 1) as 0 | 1 | 2 | 3;
   }
 
   const diceResult = performDiceCheck(
     character,
     action.stat,
-    action.useInspiration,
+    effectiveUseInspiration,
     s.mode,
     action.isUnorthodox
   );
@@ -474,14 +477,17 @@ function processTrap(
   const s = structuredClone(state);
   const character = s.party.members[action.characterIndex];
 
-  if (action.useInspiration && s.party.inspiration > 0) {
+  const effectiveUseInspiration =
+    action.useInspiration && s.party.inspiration > 0;
+
+  if (effectiveUseInspiration) {
     s.party.inspiration = Math.max(0, s.party.inspiration - 1) as 0 | 1 | 2 | 3;
   }
 
   const diceResult = performDiceCheck(
     character,
     action.stat,
-    action.useInspiration,
+    effectiveUseInspiration,
     s.mode,
     false
   );
