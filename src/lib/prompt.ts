@@ -1,5 +1,11 @@
-import { GameState, EngineResult, PlayerAction } from "./types";
+import { GameState, EngineResult, PlayerAction, DifficultyMode } from "./types";
 import { getDirectionLabel } from "./engine/movement";
+
+const MODE_LABELS: Record<DifficultyMode, string> = {
+  easy: "😎 이지",
+  normal: "📜 노말",
+  hard: "🔥 하드",
+};
 
 export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
@@ -12,6 +18,7 @@ export function buildSystemPrompt(state: GameState): string {
 - 전사 "${warrior.name}" (플레이어): 용맹한 전사. 파티의 리더.
 - 피나 (도적): 수다스럽고 활기찬 분위기메이커. 오렌지빛 단발, 푸른 눈. ENFP. 말투: 밝고 경쾌, 반말.
 - 미나 (마법사): 이지적이고 침착한 마법사. 긴 은발, 푸른 눈. INTJ. 말투: 차분하고 논리적, 존댓말.
+- 린린 (NPC, 마법사): 소심하고 예의바른 성격. 보랏빛 장발, 보랏빛 눈동자, 마녀 모자와 로브 차림. ISFJ. 말투: 조심스럽고 공손한 존댓말. 2층 특정 지점에서만 일회성으로 등장하는 NPC이므로, 린린과 만나는 상황에서만 묘사·등장시키세요.
 
 ## 문체 지침
 - 환경 묘사는 생생하고 감각적으로.
@@ -20,6 +27,7 @@ export function buildSystemPrompt(state: GameState): string {
 - 다이스 판정 결과에 맞는 극적인 묘사를 하세요.
 
 ## 현재 게임 상태
+- 난이도: ${MODE_LABELS[state.mode]}
 - 층: ${party.floor}층
 - 위치: ${party.position.col}${party.position.row}
 - 영감: ${"★".repeat(party.inspiration)}${"☆".repeat(3 - party.inspiration)}
@@ -34,8 +42,9 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 ## 응답 규칙
 1. narration: 내레이션 텍스트. 피나·미나의 대사를 자연스럽게 포함.
 2. choices: 정확히 3개의 선택지를 생성. 각 선택지는 label(짧은 키워드)과 text(시도 묘사문).
-3. 선택지는 제공된 availableActions 목록에 대응해야 합니다.
-4. JSON 형식으로만 응답하세요.
+3. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
+4. 선택지는 제공된 availableActions 목록에 대응해야 합니다.
+5. JSON 형식으로만 응답하세요.
 
 ## 응답 형식 (JSON만, 다른 텍스트 없이)
 {

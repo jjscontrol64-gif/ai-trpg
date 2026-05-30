@@ -66,12 +66,20 @@ export function processAttack(
   let playerDamage = 0;
   let monsterDmg = 0;
 
-  if (useInspiration && s.party.inspiration > 0) {
+  const effectiveUseInspiration = useInspiration && s.party.inspiration > 0;
+
+  if (effectiveUseInspiration) {
     s.party.inspiration = Math.max(0, s.party.inspiration - 1) as 0 | 1 | 2 | 3;
   }
 
   const mainStat = getMainStat(character);
-  const diceResult = performDiceCheck(character, mainStat, useInspiration, s.mode, false);
+  const diceResult = performDiceCheck(
+    character,
+    mainStat,
+    effectiveUseInspiration,
+    s.mode,
+    false
+  );
 
   switch (diceResult.judgment) {
     case "critical_success":
@@ -335,9 +343,6 @@ export function getCombatActions(state: GameState): PlayerAction[] {
   state.party.members.forEach((member, idx) => {
     if (member.hp <= 0) return;
     actions.push({ type: "attack", characterIndex: idx, useInspiration: false });
-    if (state.party.inspiration > 0) {
-      actions.push({ type: "attack", characterIndex: idx, useInspiration: true });
-    }
     for (const action of member.actions) {
       if (action.remaining > 0 && action.type === "combat") {
         actions.push({
