@@ -5,7 +5,7 @@ import {
   Character,
   PlayerAction,
 } from "../types";
-import { performDiceCheck } from "./dice";
+import { getEffectiveStat, performDiceCheck } from "./dice";
 import { bossesByFloor, monstersByDifficulty } from "../registry/game-registry";
 
 export function spawnMonster(difficulty: 1 | 2 | 3): MonsterState {
@@ -83,13 +83,13 @@ export function processAttack(
 
   switch (diceResult.judgment) {
     case "critical_success":
-      playerDamage = 5;
+      playerDamage = getAttackDamage(diceResult.judgment, diceResult.stat);
       monsterDmg = 0;
-      eventLog = `대성공! ${character.name}의 공격으로 ${monster.name}에게 5 데미지. 몬스터 공격 회피.`;
+      eventLog = `대성공! ${character.name}의 공격으로 ${monster.name}에게 ${playerDamage} 데미지. 몬스터 공격 회피.`;
       break;
     case "success":
-      playerDamage = 2;
-      eventLog = `성공! ${character.name}의 공격으로 ${monster.name}에게 2 데미지.`;
+      playerDamage = getAttackDamage(diceResult.judgment, diceResult.stat);
+      eventLog = `성공! ${character.name}의 공격으로 ${monster.name}에게 ${playerDamage} 데미지.`;
       break;
     case "failure":
       playerDamage = 0;
@@ -223,6 +223,7 @@ export function processSpecialAction(
   const action = character.actions.find((a) => a.name === actionName);
   let eventLog = "";
   let diceResult: DiceRollResult | undefined;
+  let playerDamage = 0;
 
   if (!action || action.remaining <= 0) {
     return {
@@ -241,22 +242,20 @@ export function processSpecialAction(
   switch (actionName) {
     case "강타": {
       // 무조건 대성공
-      monster.hp = Math.max(0, monster.hp - 5);
-      eventLog = `강타! ${character.name}의 필살 공격으로 ${monster.name}에게 5 데미지. 몬스터 공격 회피.`;
+      const mainStat = getMainStat(character);
+      const statValue = getEffectiveStat(character, mainStat);
+      playerDamage = getAttackDamage("critical_success", statValue);
+      monster.hp = Math.max(0, monster.hp - playerDamage);
+      eventLog = `강타! ${character.name}의 필살 공격으로 ${monster.name}에게 ${playerDamage} 데미지. 몬스터 공격 회피.`;
       break;
     }
     case "암습": {
       // 몬스터 공격 회피 + 자신 공격은 다이스 판정
       const mainStat = getMainStat(character);
       diceResult = performDiceCheck(character, mainStat, false, s.mode, false);
-      const dmg =
-        diceResult.judgment === "critical_success"
-          ? 5
-          : diceResult.judgment === "success"
-            ? 2
-            : 0;
-      monster.hp = Math.max(0, monster.hp - dmg);
-      eventLog = `암습! 피나가 그림자에서 공격. ${dmg} 데미지. 몬스터 반격 회피.`;
+      playerDamage = getAttackDamage(diceResult.judgment, diceResult.stat);
+      monster.hp = Math.max(0, monster.hp - playerDamage);
+      eventLog = `암습! 피나가 그림자에서 공격. ${playerDamage} 데미지. 몬스터 반격 회피.`;
       break;
     }
     case "마력속박": {
@@ -281,7 +280,7 @@ export function processSpecialAction(
   return {
     state: s,
     diceResult,
-    playerDamage: 0,
+    playerDamage,
     monsterDamage: 0,
     monsterDefeated,
     partyDefeated: false,
@@ -370,8 +369,24 @@ export function getCombatActions(state: GameState): PlayerAction[] {
 }
 
 function getMainStat(character: Character): "str" | "dex" | "int" {
-  const s = character.baseStats;
-  if (s.str >= s.dex && s.str >= s.int) return "str";
-  if (s.dex >= s.str && s.dex >= s.int) return "dex";
-  return "int";
+  switch (character.role) {
+    case "warrior":
+      return "str";
+    case "rogue":
+      return "dex";
+    case "mage":
+      return "int";
+  }
+}
+
+function getAttackDamage(judgment: DiceRollResult["judgment"], mainStat: number): number {
+  switch (judgment) {
+    case "critical_success":
+      return mainStat + 5;
+    case "success":
+      return mainStat + 1;
+    case "failure":
+    case "critical_failure":
+      return 0;
+  }
 }
