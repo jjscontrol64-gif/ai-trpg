@@ -194,12 +194,14 @@ export type PlayerAction =
       stat: StatType;
       useInspiration: boolean;
       isUnorthodox: boolean;
+      specialActionName?: "활로개척";
     }
   | {
       type: "trap_attempt";
       characterIndex: number;
       stat: StatType;
       useInspiration: boolean;
+      specialActionName?: "활로개척";
     }
   | { type: "npc_interact" }
   | { type: "pathfinding" }

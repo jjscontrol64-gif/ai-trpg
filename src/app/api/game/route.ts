@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GameState, PlayerAction, GameResponse, ChoiceOption } from "@/lib/types";
-import { processAction, getAvailableDirections } from "@/lib/engine";
+import { GameState, PlayerAction, GameResponse } from "@/lib/types";
+import { processAction, getAvailableDirections, getTalkBiasedActions } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
 import { createAIProvider } from "@/lib/ai";
+import { mapChoicesToActions, ModelChoice, normalizeActionIndex } from "@/lib/action-options";
 
 type GameNarrationData = {
   narration: string;
-  choices: { label: string; text: string }[];
+  choices: ModelChoice[];
 };
 
 type ApiKeySession = {
@@ -45,6 +46,10 @@ export async function POST(req: NextRequest) {
         body.choiceText,
         resolvedApiKey
       );
+    }
+
+    if (type === "talk") {
+      return handleTalk(body.gameState, resolvedApiKey);
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
@@ -170,6 +175,58 @@ async function handleStartGame(
   };
 
   return NextResponse.json(response);
+}
+
+async function handleTalk(
+  gameState: GameState,
+  resolvedApiKey?: ResolvedApiKey
+): Promise<NextResponse> {
+  if (
+    !gameState ||
+    gameState.combat.active ||
+    gameState.phase === "combat" ||
+    gameState.phase === "game_over" ||
+    gameState.phase === "victory"
+  ) {
+    return NextResponse.json(
+      { error: "대화하기는 비전투 진행 중에만 사용할 수 있습니다." },
+      { status: 400 }
+    );
+  }
+
+  const apiKey = resolvedApiKey?.apiKey;
+  const apiKeySessionId = resolvedApiKey?.apiKeySessionId;
+  const actions = getTalkBiasedActions(gameState);
+  const engineResult = {
+    newState: gameState,
+    eventSummary: "동료들과 잠시 의견을 나누며 다음 행동을 다시 가늠한다.",
+    nextActions: actions,
+  };
+
+  const systemPrompt = buildSystemPrompt(gameState);
+  const history = gameState.messageHistory.slice(-10);
+  const messages = [
+    ...history.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    {
+      role: "user" as const,
+      content: buildUserMessage(engineResult, undefined, { talkBiased: true }),
+    },
+  ];
+
+  const narrationData = await generateNarrationData(systemPrompt, messages, apiKey);
+  const choices = mapChoicesToActions(narrationData.choices, actions);
+
+  return NextResponse.json({
+    narration: narrationData.narration,
+    eventSummary: engineResult.eventSummary,
+    choices,
+    gameState,
+    statusWindow: buildStatusWindow(gameState),
+    apiKeySessionId,
+  } satisfies GameResponse);
 }
 
 async function handlePlayerAction(
@@ -374,6 +431,11 @@ function normalizeChoices(
       (choice) =>
         typeof choice?.label === "string" && typeof choice?.text === "string"
     )
+    .map((choice) => ({
+      label: choice.label,
+      text: choice.text,
+      actionIndex: normalizeActionIndex(choice.actionIndex),
+    }))
     .slice(0, 3);
 
   return normalized.length > 0 ? normalized : fallbackChoices();
@@ -385,17 +447,6 @@ function fallbackChoices(): GameNarrationData["choices"] {
     { label: "\uc870\uc2ec\ud788 \uc804\uc9c4", text: "\ubb34\uae30\ub97c \uc900\ube44\ud558\uace0 \ucc9c\ucc9c\ud788 \uc804\uc9c4\ud55c\ub2e4" },
     { label: "\uc8fc\ubcc0 \ud0d0\uc0c9", text: "\uc8fc\ubcc0\uc744 \uc790\uc138\ud788 \uc0b4\ud540\ub2e4" },
   ];
-}
-
-function mapChoicesToActions(
-  modelChoices: { label: string; text: string }[],
-  availableActions: PlayerAction[]
-): ChoiceOption[] {
-  return modelChoices.slice(0, 3).map((choice, idx) => ({
-    label: choice.label,
-    text: choice.text,
-    action: availableActions[idx % availableActions.length] ?? availableActions[0],
-  }));
 }
 
 async function getEndingNarration(

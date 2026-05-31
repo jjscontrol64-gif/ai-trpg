@@ -181,6 +181,13 @@ export default function HomePage() {
       | undefined;
   }, [beats]);
 
+  const canTalk =
+    Boolean(gameState) &&
+    !gameState?.combat.active &&
+    gameState?.phase !== "combat" &&
+    gameState?.phase !== "game_over" &&
+    gameState?.phase !== "victory";
+
   const handleStart = (name: string, apiKey: string) => {
     startTransition(async () => {
       try {
@@ -334,6 +341,45 @@ export default function HomePage() {
   const handleRetryChoice = () => {
     if (!lastSubmittedChoice || choiceSubmitStatus !== "failed") return;
     handleChoice(lastSubmittedChoice, false, false);
+  };
+
+  const handleTalk = () => {
+    if (!gameState || !statusWindow || !canTalk || choiceSubmitStatus === "submitting") return;
+
+    setChoiceSubmitStatus("submitting");
+    setLastSubmittedChoice(null);
+    setInspirationArmed(false);
+    startTransition(async () => {
+      try {
+        setError(null);
+        const response = await postGame<GameResponse>({
+          type: "talk",
+          gameState,
+          apiKeySessionId,
+          apiKey: apiKeySessionId ? undefined : geminiApiKey,
+        });
+
+        setGeminiApiKey("");
+        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
+        setGameState(response.gameState);
+        setStatusWindow(response.statusWindow);
+        setCurrentChoices(response.choices);
+        setChoiceSubmitStatus("idle");
+        setBeats((prev) => [
+          ...prev,
+          {
+            id: createId(),
+            role: "assistant",
+            narration: response.narration,
+            eventSummary: response.eventSummary,
+            diceResult: response.diceResult,
+          },
+        ]);
+      } catch (caught) {
+        setChoiceSubmitStatus("failed");
+        setError(caught instanceof Error ? caught.message : "대화 생성에 실패했습니다.");
+      }
+    });
   };
 
   const handleBack = () => {
@@ -490,6 +536,15 @@ export default function HomePage() {
                   </span>
                   <button
                     type="button"
+                    onClick={handleTalk}
+                    disabled={!canTalk || choiceSubmitStatus === "submitting"}
+                    className="inline-flex h-9 items-center rounded-full border border-white/8 bg-black/15 px-3 text-xs font-semibold transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    대화하기
+                  </button>
+                  <button
+                    type="button"
                     role="switch"
                     aria-checked={inspirationArmed}
                     onClick={() => setInspirationArmed((armed) => !armed)}
@@ -570,10 +625,10 @@ export default function HomePage() {
               <h2 className="panel-title">핵심 규칙</h2>
               <div className="mt-4 grid gap-3 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
-                  정석적 선택: `1d36 + 스탯 + 영감`
+                  정석적 선택: `1d20 + 스탯 + 영감`
                 </div>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
-                  비정석적 선택: `1d36`만 사용, 26 이상이면 성공
+                  비정석적 선택: `1d20`만 사용, 15 이상이면 성공
                 </div>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
                   영감은 최대 `★★★`, 사용 시 다음 판정에 `+5`

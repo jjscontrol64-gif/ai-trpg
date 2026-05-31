@@ -1,13 +1,13 @@
 import { DifficultyMode, JudgmentResult, DiceRollResult, StatType, Character } from "../types";
 
-export function rollD36(): number {
-  return Math.floor(Math.random() * 36) + 1;
+export function rollD20(): number {
+  return Math.floor(Math.random() * 20) + 1;
 }
 
 const thresholds: Record<DifficultyMode, { critSuccess: number; success: number; failure: number }> = {
-  hard: { critSuccess: 42, success: 30, failure: 16 },
-  normal: { critSuccess: 38, success: 25, failure: 11 },
-  easy: { critSuccess: 30, success: 18, failure: 10 },
+  hard: { critSuccess: 24, success: 16, failure: 8 },
+  normal: { critSuccess: 23, success: 12, failure: 6 },
+  easy: { critSuccess: 20, success: 9, failure: 4 },
 };
 
 export function judgeResult(total: number, mode: DifficultyMode): JudgmentResult {
@@ -19,7 +19,7 @@ export function judgeResult(total: number, mode: DifficultyMode): JudgmentResult
 }
 
 export function judgeUnorthodox(raw: number): JudgmentResult {
-  return raw >= 26 ? "success" : "failure";
+  return raw >= 15 ? "success" : "failure";
 }
 
 export function getEffectiveStat(character: Character, stat: StatType): number {
@@ -41,7 +41,7 @@ export function performDiceCheck(
   mode: DifficultyMode,
   isUnorthodox: boolean
 ): DiceRollResult {
-  const raw = rollD36();
+  const raw = rollD20();
 
   if (isUnorthodox) {
     return {

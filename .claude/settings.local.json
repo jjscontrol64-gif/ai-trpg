@@ -15,7 +15,8 @@
       "Bash(ls:*)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)"
     ],
     "deny": [
       "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\\\.env\")",
