@@ -1,11 +1,31 @@
-import { GameState, EngineResult, PlayerAction, DifficultyMode } from "./types";
+import {
+  GameState,
+  EngineResult,
+  PlayerAction,
+  DifficultyMode,
+  Character,
+  StatType,
+} from "./types";
 import { MAX_PROMPT_ACTIONS } from "./action-options";
 import { getDirectionLabel } from "./engine/movement";
+import { getEffectiveStat } from "./engine/dice";
 
 const MODE_LABELS: Record<DifficultyMode, string> = {
   easy: "😎 이지",
   normal: "📜 노말",
   hard: "🔥 하드",
+};
+
+const ROLE_LABELS: Record<Character["role"], string> = {
+  warrior: "전사",
+  rogue: "도적",
+  mage: "마법사",
+};
+
+const STAT_LABELS: Record<StatType, string> = {
+  str: "STR",
+  dex: "DEX",
+  int: "INT",
 };
 
 type UserMessageOptions = {
@@ -47,17 +67,19 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 ## 응답 규칙
 1. narration: 내레이션 텍스트. 피나·미나의 대사를 자연스럽게 포함.
 2. choices: 정확히 3개의 선택지를 생성. 각 선택지는 actionIndex(아래 가능한 행동의 actionIndex 숫자), label(짧은 키워드), text(시도 묘사문)를 포함.
-3. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
-4. 선택지는 제공된 가능한 행동 목록에 대응해야 하며, actionIndex는 반드시 선택한 행동의 값을 그대로 사용하세요.
-5. JSON 형식으로만 응답하세요.
+3. 가능한 행동에는 수행 캐릭터와 능력치가 "이름(역할, 스탯 값)" 형태로 표시됩니다. 판정·전투 행동은 해당 능력치가 가장 높은 캐릭터를 우선 선택하세요. (예: 고대 문자 해독 등 지능 판정은 INT가 높은 미나, 힘 판정은 전사, 민첩 판정은 피나)
+4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 미나 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요.
+5. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
+6. 선택지는 제공된 가능한 행동 목록에 대응해야 하며, actionIndex는 반드시 선택한 행동의 값을 그대로 사용하세요.
+7. JSON 형식으로만 응답하세요.
 
 ## 응답 형식 (JSON만, 다른 텍스트 없이)
 {
   "narration": "내레이션 텍스트",
   "choices": [
-    { "actionIndex": 0, "label": "🧭 선택지 키워드", "text": "시도 묘사문" },
-    { "actionIndex": 1, "label": "⚔️ 선택지 키워드", "text": "시도 묘사문" },
-    { "actionIndex": 2, "label": "🛡️ 선택지 키워드", "text": "시도 묘사문" }
+    { "actionIndex": 0, "label": "🧭 ${warrior.name} — 선택지 키워드", "text": "시도 묘사문" },
+    { "actionIndex": 1, "label": "⚔️ 피나 — 선택지 키워드", "text": "시도 묘사문" },
+    { "actionIndex": 2, "label": "🛡️ 미나 — 선택지 키워드", "text": "시도 묘사문" }
   ]
 }`;
 }
@@ -88,9 +110,10 @@ export function buildUserMessage(
   }
 
   msg += `\n\n[가능한 행동]\n`;
+  const members = engineResult.newState.party.members;
   const actions = engineResult.nextActions.slice(0, MAX_PROMPT_ACTIONS);
   for (let i = 0; i < actions.length; i++) {
-    msg += `actionIndex=${i}: ${describeAction(actions[i])}\n`;
+    msg += `actionIndex=${i}: ${describeAction(actions[i], members)}\n`;
   }
 
   if (options.talkBiased) {
@@ -112,14 +135,19 @@ function judgmentLabel(j: string): string {
   return labels[j] || j;
 }
 
-function describeAction(action: PlayerAction): string {
+// 판정 캐릭터를 "이름(역할, 스탯 값)" 형태로 표기해 모델이 적합한 캐릭터를 고를 수 있게 한다.
+function describeActor(character: Character, stat: StatType): string {
+  return `${character.name}(${ROLE_LABELS[character.role]}, ${STAT_LABELS[stat]} ${getEffectiveStat(character, stat)})`;
+}
+
+function describeAction(action: PlayerAction, members: Character[]): string {
   switch (action.type) {
     case "move":
       return `${getDirectionLabel(action.direction)}으로 이동`;
     case "attack":
-      return `공격 (캐릭터 ${action.characterIndex})${action.useInspiration ? " [영감 사용]" : ""}`;
+      return `공격 — ${members[action.characterIndex].name}${action.useInspiration ? " [영감 사용]" : ""}`;
     case "special_action":
-      return `${action.actionName} 사용 (캐릭터 ${action.characterIndex})`;
+      return `${action.actionName} 사용 — ${members[action.characterIndex].name}`;
     case "flee":
       return action.useSmokeBomb ? "연막탄으로 도주" : "도주 시도";
     case "use_item":
@@ -127,15 +155,21 @@ function describeAction(action: PlayerAction): string {
     case "rest":
       return "휴식";
     case "puzzle_attempt":
-      return `수수께끼 도전 (${action.stat}, 캐릭터 ${action.characterIndex})`;
+      if (action.specialActionName === "활로개척") {
+        return `활로개척 사용 — ${members[action.characterIndex].name}(수수께끼 무조건 대성공)`;
+      }
+      return `수수께끼 도전 (${STAT_LABELS[action.stat]} 판정) — ${describeActor(members[action.characterIndex], action.stat)}`;
     case "trap_attempt":
-      return `함정 돌파 (${action.stat}, 캐릭터 ${action.characterIndex})`;
+      if (action.specialActionName === "활로개척") {
+        return `활로개척 사용 — ${members[action.characterIndex].name}(함정 무조건 대성공)`;
+      }
+      return `함정 돌파 (${STAT_LABELS[action.stat]} 판정) — ${describeActor(members[action.characterIndex], action.stat)}`;
     case "npc_interact":
       return "린린과 대화";
     case "pathfinding":
-      return "패스파인딩";
+      return "패스파인딩 — 피나";
     case "alchemy":
-      return "연금생성";
+      return "연금생성 — 미나";
     default:
       return "알 수 없는 행동";
   }

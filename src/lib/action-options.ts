@@ -1,6 +1,8 @@
 import { ChoiceOption, PlayerAction } from "./types";
 
-export const MAX_PROMPT_ACTIONS = 6;
+// 수수께끼/함정 방은 3캐릭터 × 3스탯(+활로개척)으로 최대 10개까지 행동이 생성되므로
+// 적합한 캐릭터(예: 지능 판정의 미나)가 잘리지 않도록 한도를 넉넉히 잡는다.
+export const MAX_PROMPT_ACTIONS = 12;
 
 export type ModelChoice = {
   label: string;

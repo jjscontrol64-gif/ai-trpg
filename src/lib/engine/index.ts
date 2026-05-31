@@ -5,8 +5,11 @@ import {
   ConsumableItem,
   RoomData,
   RoomType,
+  Character,
+  DiceRollResult,
+  StatType,
 } from "../types";
-import { performDiceCheck } from "./dice";
+import { getEffectiveStat, performDiceCheck } from "./dice";
 import {
   getAdjacentPosition,
   getRoomAt,
@@ -385,26 +388,33 @@ function processPuzzle(
   const s = structuredClone(state);
   const character = s.party.members[action.characterIndex];
 
-  // 활로개척 체크
-  const pathAction = character.actions.find((a) => a.name === "활로개척");
-  if (pathAction && pathAction.remaining > 0) {
-    // 활로개척 가능하지만 여기서는 일반 판정
-  }
-
   const effectiveUseInspiration =
     action.useInspiration && s.party.inspiration > 0;
 
-  if (effectiveUseInspiration) {
+  const pathAction = getUsablePathfindingAction(character, action.specialActionName);
+  if (action.specialActionName === "활로개척" && !pathAction) {
+    return {
+      newState: s,
+      eventSummary: "활로개척 사용 불가.",
+      nextActions: buildPuzzleActions(s),
+    };
+  }
+
+  if (pathAction) {
+    pathAction.remaining--;
+  } else if (effectiveUseInspiration) {
     s.party.inspiration = Math.max(0, s.party.inspiration - 1) as 0 | 1 | 2 | 3;
   }
 
-  const diceResult = performDiceCheck(
-    character,
-    action.stat,
-    effectiveUseInspiration,
-    s.mode,
-    action.isUnorthodox
-  );
+  const diceResult = pathAction
+    ? createCriticalSuccessResult(character, action.stat, s.mode)
+    : performDiceCheck(
+        character,
+        action.stat,
+        effectiveUseInspiration,
+        s.mode,
+        action.isUnorthodox
+      );
 
   let summary = "";
   const room = getRoomAt(s, s.party.position.col, s.party.position.row);
@@ -434,7 +444,9 @@ function processPuzzle(
       case "critical_success": {
         const equip = getRandomEquip("rare");
         autoEquip(s, equip);
-        summary = `대성공! 희귀 장비 '${equip.name}' 획득. 난관 돌파.`;
+        summary = pathAction
+          ? `활로개척! 대성공으로 난관을 돌파했다. 희귀 장비 '${equip.name}' 획득.`
+          : `대성공! 희귀 장비 '${equip.name}' 획득. 난관 돌파.`;
         break;
       }
       case "success": {
@@ -480,22 +492,37 @@ function processTrap(
   const effectiveUseInspiration =
     action.useInspiration && s.party.inspiration > 0;
 
-  if (effectiveUseInspiration) {
+  const pathAction = getUsablePathfindingAction(character, action.specialActionName);
+  if (action.specialActionName === "활로개척" && !pathAction) {
+    return {
+      newState: s,
+      eventSummary: "활로개척 사용 불가.",
+      nextActions: buildTrapActions(s),
+    };
+  }
+
+  if (pathAction) {
+    pathAction.remaining--;
+  } else if (effectiveUseInspiration) {
     s.party.inspiration = Math.max(0, s.party.inspiration - 1) as 0 | 1 | 2 | 3;
   }
 
-  const diceResult = performDiceCheck(
-    character,
-    action.stat,
-    effectiveUseInspiration,
-    s.mode,
-    false
-  );
+  const diceResult = pathAction
+    ? createCriticalSuccessResult(character, action.stat, s.mode)
+    : performDiceCheck(
+        character,
+        action.stat,
+        effectiveUseInspiration,
+        s.mode,
+        false
+      );
 
   let summary = "";
   switch (diceResult.judgment) {
     case "critical_success":
-      summary = "대성공! 무손실로 함정 돌파.";
+      summary = pathAction
+        ? "활로개척! 대성공으로 함정을 무손실 돌파."
+        : "대성공! 무손실로 함정 돌파.";
       for (const m of s.party.members) {
         for (const act of m.actions) {
           act.remaining = Math.min(act.max, act.remaining + 1);
@@ -750,6 +777,34 @@ export function getTalkBiasedActions(state: GameState): PlayerAction[] {
   ];
 }
 
+function getUsablePathfindingAction(
+  character: Character,
+  specialActionName?: "활로개척"
+): Character["actions"][number] | undefined {
+  if (specialActionName !== "활로개척") return undefined;
+  return character.actions.find(
+    (action) => action.name === "활로개척" && action.remaining > 0
+  );
+}
+
+function createCriticalSuccessResult(
+  character: Character,
+  stat: StatType,
+  mode: GameState["mode"]
+): DiceRollResult {
+  const statValue = getEffectiveStat(character, stat);
+  const raw = 20;
+  return {
+    raw,
+    stat: statValue,
+    inspirationBonus: 0,
+    total: raw + statValue,
+    judgment: "critical_success",
+    mode,
+    isUnorthodox: false,
+  };
+}
+
 function buildPuzzleActions(state: GameState): PlayerAction[] {
   const actions: PlayerAction[] = [];
   const stats: ("str" | "dex" | "int")[] = ["str", "dex", "int"];
@@ -777,6 +832,7 @@ function buildPuzzleActions(state: GameState): PlayerAction[] {
         stat: "str",
         useInspiration: false,
         isUnorthodox: false,
+        specialActionName: "활로개척",
       });
     }
   }
@@ -796,6 +852,19 @@ function buildTrapActions(state: GameState): PlayerAction[] {
         characterIndex: i,
         stat,
         useInspiration: false,
+      });
+    }
+    const char = state.party.members[i];
+    const pathAction = char.actions.find(
+      (a) => a.name === "활로개척" && a.remaining > 0
+    );
+    if (pathAction) {
+      actions.push({
+        type: "trap_attempt",
+        characterIndex: i,
+        stat: "str",
+        useInspiration: false,
+        specialActionName: "활로개척",
       });
     }
   }
