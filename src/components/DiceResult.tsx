@@ -32,7 +32,7 @@ export default function DiceResult({ result, summary }: Props) {
         [{modeLabel[result.mode]}]
       </div>
       <div style={{ color: "var(--text-secondary)" }}>
-        [판정] 1d36({result.raw})
+        [판정] 1d20({result.raw})
         {!result.isUnorthodox && (
           <>
             {" "}+ 스탯({result.stat})

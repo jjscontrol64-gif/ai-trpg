@@ -49,7 +49,7 @@ export default function StartScreen({
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             {[
-              ["1d36 판정", "모든 주요 행동은 1d36과 스탯, 영감으로 결정됩니다."],
+              ["1d20 판정", "모든 주요 행동은 1d20과 스탯, 영감으로 결정됩니다."],
               ["3인 파티", "전사, 피나, 미나의 특수액션을 조합해 전투와 탐험을 진행합니다."],
               ["층별 보스", "리치, 발록, 레드드래곤을 쓰러뜨리면 다음 층이 열립니다."],
             ].map(([title, description]) => (

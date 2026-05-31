@@ -5,7 +5,7 @@ import {
   Character,
   PlayerAction,
 } from "../types";
-import { performDiceCheck, rollD36 } from "./dice";
+import { performDiceCheck } from "./dice";
 import { bossesByFloor, monstersByDifficulty } from "../registry/game-registry";
 
 export function spawnMonster(difficulty: 1 | 2 | 3): MonsterState {

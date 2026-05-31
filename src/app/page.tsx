@@ -570,10 +570,10 @@ export default function HomePage() {
               <h2 className="panel-title">핵심 규칙</h2>
               <div className="mt-4 grid gap-3 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
-                  정석적 선택: `1d36 + 스탯 + 영감`
+                  정석적 선택: `1d20 + 스탯 + 영감`
                 </div>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
-                  비정석적 선택: `1d36`만 사용, 26 이상이면 성공
+                  비정석적 선택: `1d20`만 사용, 15 이상이면 성공
                 </div>
                 <div className="rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3">
                   영감은 최대 `★★★`, 사용 시 다음 판정에 `+5`

@@ -72,7 +72,7 @@ export function buildUserMessage(
 
   if (engineResult.diceResult) {
     const d = engineResult.diceResult;
-    msg += `\n[다이스] 1d36(${d.raw})`;
+    msg += `\n[다이스] 1d20(${d.raw})`;
     if (!d.isUnorthodox) {
       msg += ` + 스탯(${d.stat})`;
       if (d.inspirationBonus > 0) msg += ` + 영감(+${d.inspirationBonus})`;

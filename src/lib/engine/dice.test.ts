@@ -5,7 +5,7 @@ import {
   judgeResult,
   judgeUnorthodox,
   performDiceCheck,
-  rollD36,
+  rollD20,
 } from "./dice";
 import { Character } from "../types";
 
@@ -45,59 +45,59 @@ const character: Character = {
 };
 
 function mockRoll(raw: number) {
-  vi.spyOn(Math, "random").mockReturnValue((raw - 1) / 36);
+  vi.spyOn(Math, "random").mockReturnValue((raw - 1) / 20);
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("rollD36", () => {
+describe("rollD20", () => {
   it("returns 1 when Math.random is at the lower bound", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
 
-    expect(rollD36()).toBe(1);
+    expect(rollD20()).toBe(1);
   });
 
-  it("returns 36 when Math.random is just below 1", () => {
+  it("returns 20 when Math.random is just below 1", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.999999);
 
-    expect(rollD36()).toBe(36);
+    expect(rollD20()).toBe(20);
   });
 });
 
 describe("judgeResult", () => {
   it.each([
-    ["hard", 15, "critical_failure"],
-    ["hard", 16, "failure"],
-    ["hard", 29, "failure"],
-    ["hard", 30, "success"],
-    ["hard", 41, "success"],
-    ["hard", 42, "critical_success"],
-    ["normal", 10, "critical_failure"],
+    ["hard", 7, "critical_failure"],
+    ["hard", 8, "failure"],
+    ["hard", 15, "failure"],
+    ["hard", 16, "success"],
+    ["hard", 23, "success"],
+    ["hard", 24, "critical_success"],
+    ["normal", 5, "critical_failure"],
+    ["normal", 6, "failure"],
     ["normal", 11, "failure"],
-    ["normal", 24, "failure"],
-    ["normal", 25, "success"],
-    ["normal", 37, "success"],
-    ["normal", 38, "critical_success"],
-    ["easy", 9, "critical_failure"],
-    ["easy", 10, "failure"],
-    ["easy", 17, "failure"],
-    ["easy", 18, "success"],
-    ["easy", 29, "success"],
-    ["easy", 30, "critical_success"],
+    ["normal", 12, "success"],
+    ["normal", 22, "success"],
+    ["normal", 23, "critical_success"],
+    ["easy", 3, "critical_failure"],
+    ["easy", 4, "failure"],
+    ["easy", 8, "failure"],
+    ["easy", 9, "success"],
+    ["easy", 19, "success"],
+    ["easy", 20, "critical_success"],
   ] as const)("judges %s total %i as %s", (mode, total, expected) => {
     expect(judgeResult(total, mode)).toBe(expected);
   });
 });
 
 describe("judgeUnorthodox", () => {
-  it("fails on 25 or lower", () => {
-    expect(judgeUnorthodox(25)).toBe("failure");
+  it("fails on 14 or lower", () => {
+    expect(judgeUnorthodox(14)).toBe("failure");
   });
 
-  it("succeeds on 26 or higher", () => {
-    expect(judgeUnorthodox(26)).toBe("success");
+  it("succeeds on 15 or higher", () => {
+    expect(judgeUnorthodox(15)).toBe("success");
   });
 });
 
@@ -111,13 +111,13 @@ describe("getEffectiveStat", () => {
 
 describe("performDiceCheck", () => {
   it("uses raw roll, effective stat, and inspiration bonus for orthodox checks", () => {
-    mockRoll(20);
+    mockRoll(12);
 
     expect(performDiceCheck(character, "str", true, "normal", false)).toEqual({
-      raw: 20,
+      raw: 12,
       stat: 5,
       inspirationBonus: 5,
-      total: 30,
+      total: 22,
       judgment: "success",
       mode: "normal",
       isUnorthodox: false,
@@ -125,25 +125,25 @@ describe("performDiceCheck", () => {
   });
 
   it("does not add inspiration when it is not used", () => {
-    mockRoll(20);
+    mockRoll(7);
 
     expect(performDiceCheck(character, "str", false, "normal", false)).toMatchObject({
-      raw: 20,
+      raw: 7,
       stat: 5,
       inspirationBonus: 0,
-      total: 25,
+      total: 12,
       judgment: "success",
     });
   });
 
   it("ignores stat and inspiration for unorthodox checks", () => {
-    mockRoll(26);
+    mockRoll(15);
 
     expect(performDiceCheck(character, "str", true, "hard", true)).toEqual({
-      raw: 26,
+      raw: 15,
       stat: 0,
       inspirationBonus: 0,
-      total: 26,
+      total: 15,
       judgment: "success",
       mode: "hard",
       isUnorthodox: true,
@@ -151,11 +151,11 @@ describe("performDiceCheck", () => {
   });
 
   it("uses the unorthodox threshold regardless of difficulty mode", () => {
-    mockRoll(25);
+    mockRoll(14);
 
     expect(performDiceCheck(character, "str", true, "easy", true)).toMatchObject({
-      raw: 25,
-      total: 25,
+      raw: 14,
+      total: 14,
       judgment: "failure",
       isUnorthodox: true,
     });

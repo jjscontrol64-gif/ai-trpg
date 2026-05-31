@@ -5,7 +5,7 @@ import { getCombatActions, processAttack } from "./combat";
 import { Character, GameState, RoomType } from "../types";
 
 function mockRoll(raw: number) {
-  vi.spyOn(Math, "random").mockReturnValue((raw - 1) / 36);
+  vi.spyOn(Math, "random").mockReturnValue((raw - 1) / 20);
 }
 
 function createCharacter(name: string, role: Character["role"], str = 4): Character {
@@ -67,22 +67,22 @@ afterEach(() => {
 
 describe("engine inspiration usage", () => {
   it("does not apply an attack inspiration bonus when no inspiration remains", () => {
-    mockRoll(20);
+    mockRoll(3);
 
     const result = processAttack(createState("monster", 0), 0, true);
 
     expect(result.state.party.inspiration).toBe(0);
     expect(result.diceResult).toMatchObject({
-      raw: 20,
+      raw: 3,
       stat: 4,
       inspirationBonus: 0,
-      total: 24,
+      total: 7,
       judgment: "failure",
     });
   });
 
   it("does not apply a puzzle inspiration bonus when no inspiration remains", () => {
-    mockRoll(20);
+    mockRoll(3);
 
     const result = processAction(createState("puzzle", 0), {
       type: "puzzle_attempt",
@@ -94,16 +94,16 @@ describe("engine inspiration usage", () => {
 
     expect(result.newState.party.inspiration).toBe(0);
     expect(result.diceResult).toMatchObject({
-      raw: 20,
+      raw: 3,
       stat: 4,
       inspirationBonus: 0,
-      total: 24,
+      total: 7,
       judgment: "failure",
     });
   });
 
   it("does not apply a trap inspiration bonus when no inspiration remains", () => {
-    mockRoll(20);
+    mockRoll(3);
 
     const result = processAction(createState("trap", 0), {
       type: "trap_attempt",
@@ -114,25 +114,25 @@ describe("engine inspiration usage", () => {
 
     expect(result.newState.party.inspiration).toBe(0);
     expect(result.diceResult).toMatchObject({
-      raw: 20,
+      raw: 3,
       stat: 4,
       inspirationBonus: 0,
-      total: 24,
+      total: 7,
       judgment: "failure",
     });
   });
 
   it("spends inspiration and applies the bonus when inspiration remains", () => {
-    mockRoll(20);
+    mockRoll(3);
 
     const result = processAttack(createState("monster", 1), 0, true);
 
     expect(result.state.party.inspiration).toBe(0);
     expect(result.diceResult).toMatchObject({
-      raw: 20,
+      raw: 3,
       stat: 4,
       inspirationBonus: 5,
-      total: 29,
+      total: 12,
       judgment: "success",
     });
   });
