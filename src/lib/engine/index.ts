@@ -677,6 +677,79 @@ function getPostCombatActions(state: GameState): PlayerAction[] {
   return getAvailableDirections(state);
 }
 
+function getAvailableExplorationSkills(state: GameState): PlayerAction[] {
+  const actions: PlayerAction[] = [];
+  const pina = state.party.members[1];
+  const mina = state.party.members[2];
+
+  if (
+    pina?.hp > 0 &&
+    pina.actions.some((action) => action.name === "패스파인딩" && action.remaining > 0)
+  ) {
+    actions.push({ type: "pathfinding" });
+  }
+
+  if (
+    mina?.hp > 0 &&
+    mina.actions.some((action) => action.name === "연금생성" && action.remaining > 0)
+  ) {
+    actions.push({ type: "alchemy" });
+  }
+
+  return actions;
+}
+
+function getCurrentNonCombatActions(state: GameState): PlayerAction[] {
+  const room = getRoomAt(state, state.party.position.col, state.party.position.row);
+
+  if (state.phase === "event") {
+    if (room?.type === "puzzle") {
+      return buildPuzzleActions(state);
+    }
+
+    if (room?.type === "trap") {
+      return buildTrapActions(state);
+    }
+
+    if (room?.type === "npc") {
+      return [{ type: "npc_interact" }];
+    }
+
+    if (room?.type === "treasure") {
+      return [
+        {
+          type: "puzzle_attempt",
+          characterIndex: 0,
+          stat: "str",
+          useInspiration: false,
+          isUnorthodox: false,
+        },
+      ];
+    }
+  }
+
+  return getAvailableDirections(state);
+}
+
+export function getTalkBiasedActions(state: GameState): PlayerAction[] {
+  if (state.combat.active || state.phase === "combat") {
+    return getCombatActions(state);
+  }
+
+  if (state.phase === "game_over" || state.phase === "victory") {
+    return [];
+  }
+
+  const skills = getAvailableExplorationSkills(state);
+  const baseActions = getCurrentNonCombatActions(state);
+  return [
+    ...skills,
+    ...baseActions.filter(
+      (action) => !skills.some((skill) => skill.type === action.type)
+    ),
+  ];
+}
+
 function buildPuzzleActions(state: GameState): PlayerAction[] {
   const actions: PlayerAction[] = [];
   const stats: ("str" | "dex" | "int")[] = ["str", "dex", "int"];

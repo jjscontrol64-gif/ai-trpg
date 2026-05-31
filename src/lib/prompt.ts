@@ -8,6 +8,10 @@ const MODE_LABELS: Record<DifficultyMode, string> = {
   hard: "🔥 하드",
 };
 
+type UserMessageOptions = {
+  talkBiased?: boolean;
+};
+
 export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
   const [warrior, pina, mina] = party.members;
@@ -60,7 +64,8 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 
 export function buildUserMessage(
   engineResult: EngineResult,
-  previousChoice?: string
+  previousChoice?: string,
+  options: UserMessageOptions = {}
 ): string {
   let msg = "";
 
@@ -88,7 +93,11 @@ export function buildUserMessage(
     msg += `actionIndex=${i}: ${describeAction(actions[i])}\n`;
   }
 
-  msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
+  if (options.talkBiased) {
+    msg += `\n이번 응답은 플레이어가 동료들과 대화하며 다음 행동을 다시 고르는 장면입니다. 상태 변화, 다이스 판정, 자원 소모, 몬스터 행동은 일어나지 않습니다. 피나와 미나의 대화를 중심으로 짧게 묘사하고, 가능한 행동 중 탐색 스킬(패스파인딩, 연금생성)이 있으면 선택지에 최소 1개 포함하세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요.`;
+  } else {
+    msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
+  }
 
   return msg;
 }

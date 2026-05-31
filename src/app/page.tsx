@@ -181,6 +181,13 @@ export default function HomePage() {
       | undefined;
   }, [beats]);
 
+  const canTalk =
+    Boolean(gameState) &&
+    !gameState?.combat.active &&
+    gameState?.phase !== "combat" &&
+    gameState?.phase !== "game_over" &&
+    gameState?.phase !== "victory";
+
   const handleStart = (name: string, apiKey: string) => {
     startTransition(async () => {
       try {
@@ -336,6 +343,45 @@ export default function HomePage() {
     handleChoice(lastSubmittedChoice, false, false);
   };
 
+  const handleTalk = () => {
+    if (!gameState || !statusWindow || !canTalk || choiceSubmitStatus === "submitting") return;
+
+    setChoiceSubmitStatus("submitting");
+    setLastSubmittedChoice(null);
+    setInspirationArmed(false);
+    startTransition(async () => {
+      try {
+        setError(null);
+        const response = await postGame<GameResponse>({
+          type: "talk",
+          gameState,
+          apiKeySessionId,
+          apiKey: apiKeySessionId ? undefined : geminiApiKey,
+        });
+
+        setGeminiApiKey("");
+        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
+        setGameState(response.gameState);
+        setStatusWindow(response.statusWindow);
+        setCurrentChoices(response.choices);
+        setChoiceSubmitStatus("idle");
+        setBeats((prev) => [
+          ...prev,
+          {
+            id: createId(),
+            role: "assistant",
+            narration: response.narration,
+            eventSummary: response.eventSummary,
+            diceResult: response.diceResult,
+          },
+        ]);
+      } catch (caught) {
+        setChoiceSubmitStatus("failed");
+        setError(caught instanceof Error ? caught.message : "대화 생성에 실패했습니다.");
+      }
+    });
+  };
+
   const handleBack = () => {
     if (!previousSnapshot || choiceSubmitStatus === "submitting") return;
 
@@ -488,6 +534,15 @@ export default function HomePage() {
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     ★ {gameState.party.inspiration}/3
                   </span>
+                  <button
+                    type="button"
+                    onClick={handleTalk}
+                    disabled={!canTalk || choiceSubmitStatus === "submitting"}
+                    className="inline-flex h-9 items-center rounded-full border border-white/8 bg-black/15 px-3 text-xs font-semibold transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    대화하기
+                  </button>
                   <button
                     type="button"
                     role="switch"
