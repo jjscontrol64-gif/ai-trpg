@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
 
 interface StartScreenProps {
-  onStart: (name: string, geminiApiKey: string) => void;
-  onResume: (geminiApiKey: string) => void;
+  onStart: (name: string, apiKey: string, modelPresetId: string) => void;
+  onResume: (apiKey: string, modelPresetId: string) => void;
   loading: boolean;
   hasSave: boolean;
   savedPlayerName?: string;
+  initialModelPresetId: string;
 }
 
 export default function StartScreen({
@@ -16,14 +18,20 @@ export default function StartScreen({
   loading,
   hasSave,
   savedPlayerName,
+  initialModelPresetId,
 }: StartScreenProps) {
   const [name, setName] = useState("");
-  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [modelPresetId, setModelPresetId] = useState(initialModelPresetId);
+  const selectedModel =
+    AI_MODEL_PRESETS.find((preset) => preset.id === modelPresetId) ??
+    AI_MODEL_PRESETS[0];
+  const providerLabel = getProviderLabel(selectedModel.provider);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && geminiApiKey.trim()) {
-      onStart(name.trim(), geminiApiKey.trim());
+    if (name.trim() && apiKey.trim()) {
+      onStart(name.trim(), apiKey.trim(), selectedModel.id);
     }
   };
 
@@ -79,18 +87,18 @@ export default function StartScreen({
                 {savedPlayerName ?? "Adventurer"}
               </div>
               <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                Enter a Gemini API key to continue. The key is not saved.
+                Select a model and enter its API key to continue. The key is not saved.
               </p>
               <button
                 type="button"
-                onClick={() => onResume(geminiApiKey.trim())}
-                disabled={!geminiApiKey.trim() || loading}
+                onClick={() => onResume(apiKey.trim(), selectedModel.id)}
+                disabled={!apiKey.trim() || loading}
                 className="mt-4 w-full rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
                 style={{
-                  background: geminiApiKey.trim()
+                  background: apiKey.trim()
                     ? "linear-gradient(135deg, var(--accent-gold), #f6d28d)"
                     : "var(--bg-panel-soft)",
-                  color: geminiApiKey.trim() ? "#1a1207" : "var(--text-muted)",
+                  color: apiKey.trim() ? "#1a1207" : "var(--text-muted)",
                 }}
               >
                 {loading ? "Loading..." : "Continue"}
@@ -155,18 +163,51 @@ export default function StartScreen({
             </div>
             <div>
               <label
-                htmlFor="gemini-api-key"
+                htmlFor="model-preset"
                 className="mb-2 block text-sm"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Gemini API Key
+                AI 모델
+              </label>
+              <select
+                id="model-preset"
+                value={selectedModel.id}
+                onChange={(e) => setModelPresetId(e.target.value)}
+                className="w-full rounded-[1.2rem] border border-[color:var(--border-color)] bg-[color:var(--bg-panel-soft)] py-3 pl-4 pr-10 text-center text-sm outline-none transition focus:border-[color:var(--accent-gold)]"
+                style={{
+                  color: "var(--text-primary)",
+                  colorScheme: "dark",
+                }}
+                disabled={loading}
+              >
+                {AI_MODEL_PRESETS.map((preset) => (
+                  <option
+                    key={preset.id}
+                    value={preset.id}
+                    style={{
+                      backgroundColor: "#211a14",
+                      color: "#f4ead8",
+                    }}
+                  >
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="ai-api-key"
+                className="mb-2 block text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {providerLabel} API Key
               </label>
               <input
-                id="gemini-api-key"
+                id="ai-api-key"
                 type="password"
-                value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
-                placeholder="AIza..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={getApiKeyPlaceholder(selectedModel.provider)}
                 className="w-full rounded-[1.2rem] border border-[color:var(--border-color)] bg-[color:var(--bg-panel-soft)] px-4 py-3 text-center text-sm outline-none transition focus:border-[color:var(--accent-gold)]"
                 style={{
                   color: "var(--text-primary)",
@@ -176,18 +217,18 @@ export default function StartScreen({
                 disabled={loading}
               />
               <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                Key is kept only in memory for this session and is sent to the server only for Gemini API calls.
+                Key is kept only in memory for this session and is sent to the server only for AI provider calls.
               </p>
             </div>
             <button
               type="submit"
-              disabled={!name.trim() || !geminiApiKey.trim() || loading}
+              disabled={!name.trim() || !apiKey.trim() || loading}
               className="w-full rounded-[1.2rem] px-4 py-3 text-lg font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
               style={{
-                background: name.trim() && geminiApiKey.trim()
+                background: name.trim() && apiKey.trim()
                   ? "linear-gradient(135deg, var(--accent-gold), #f6d28d)"
                   : "var(--bg-panel-soft)",
-                color: name.trim() && geminiApiKey.trim() ? "#1a1207" : "var(--text-muted)",
+                color: name.trim() && apiKey.trim() ? "#1a1207" : "var(--text-muted)",
               }}
             >
               {loading ? "던전 진입 중..." : "던전에 입장하다"}
@@ -197,4 +238,26 @@ export default function StartScreen({
       </div>
     </div>
   );
+}
+
+function getProviderLabel(provider: string): string {
+  switch (provider) {
+    case "claude":
+      return "Claude";
+    case "openai":
+      return "OpenAI";
+    default:
+      return "Gemini";
+  }
+}
+
+function getApiKeyPlaceholder(provider: string): string {
+  switch (provider) {
+    case "claude":
+      return "sk-ant-...";
+    case "openai":
+      return "sk-...";
+    default:
+      return "AIza...";
+  }
 }
