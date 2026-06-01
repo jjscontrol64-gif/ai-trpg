@@ -2,15 +2,31 @@
 
 import { useState } from "react";
 import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
+import { DifficultyMode } from "@/lib/types";
 
 interface StartScreenProps {
-  onStart: (name: string, apiKey: string, modelPresetId: string) => void;
+  onStart: (
+    name: string,
+    apiKey: string,
+    modelPresetId: string,
+    difficulty: DifficultyMode
+  ) => void;
   onResume: (apiKey: string, modelPresetId: string) => void;
   loading: boolean;
   hasSave: boolean;
   savedPlayerName?: string;
   initialModelPresetId: string;
 }
+
+const DIFFICULTY_OPTIONS: {
+  id: DifficultyMode;
+  label: string;
+  description: string;
+}[] = [
+  { id: "easy", label: "😎 이지", description: "판정이 관대합니다" },
+  { id: "normal", label: "📜 노말", description: "표준 균형" },
+  { id: "hard", label: "🔥 하드", description: "판정이 가혹합니다" },
+];
 
 export default function StartScreen({
   onStart,
@@ -23,6 +39,7 @@ export default function StartScreen({
   const [name, setName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [modelPresetId, setModelPresetId] = useState(initialModelPresetId);
+  const [difficulty, setDifficulty] = useState<DifficultyMode>("normal");
   const selectedModel =
     AI_MODEL_PRESETS.find((preset) => preset.id === modelPresetId) ??
     AI_MODEL_PRESETS[0];
@@ -31,7 +48,7 @@ export default function StartScreen({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && apiKey.trim()) {
-      onStart(name.trim(), apiKey.trim(), selectedModel.id);
+      onStart(name.trim(), apiKey.trim(), selectedModel.id, difficulty);
     }
   };
 
@@ -160,6 +177,48 @@ export default function StartScreen({
                 autoFocus
                 disabled={loading}
               />
+            </div>
+            <div>
+              <span
+                className="mb-2 block text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                난이도
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                {DIFFICULTY_OPTIONS.map((option) => {
+                  const active = difficulty === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setDifficulty(option.id)}
+                      disabled={loading}
+                      aria-pressed={active}
+                      className="rounded-[1.2rem] border px-2 py-3 text-center text-sm transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
+                      style={{
+                        borderColor: active
+                          ? "var(--accent-gold)"
+                          : "var(--border-color)",
+                        background: active
+                          ? "rgba(191,143,74,0.16)"
+                          : "var(--bg-panel-soft)",
+                        color: active
+                          ? "var(--text-primary)"
+                          : "var(--text-secondary)",
+                      }}
+                    >
+                      <span className="block font-semibold">{option.label}</span>
+                      <span
+                        className="mt-1 block text-[0.7rem] leading-4"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {option.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div>
               <label

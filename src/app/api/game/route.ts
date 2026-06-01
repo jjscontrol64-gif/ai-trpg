@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GameState, PlayerAction, GameResponse } from "@/lib/types";
+import { GameState, PlayerAction, GameResponse, DifficultyMode } from "@/lib/types";
 import { processAction, getAvailableDirections, getTalkBiasedActions } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
@@ -63,7 +63,11 @@ export async function POST(req: NextRequest) {
     const resolvedAIModel = resolveAIModel(apiKey, apiKeySessionId, modelPresetId);
 
     if (type === "start_game") {
-      return await handleStartGame(body.playerName, resolvedAIModel);
+      return await handleStartGame(
+        body.playerName,
+        parseDifficulty(body.difficulty),
+        resolvedAIModel
+      );
     }
 
     if (type === "player_action") {
@@ -214,11 +218,16 @@ function isTemporaryAIProviderError(error: unknown): boolean {
   return error instanceof TemporaryAIProviderError;
 }
 
+function parseDifficulty(value: unknown): DifficultyMode {
+  return value === "easy" || value === "hard" ? value : "normal";
+}
+
 async function handleStartGame(
   playerName: string,
+  difficulty: DifficultyMode,
   resolvedAIModel: ResolvedAIModel
 ): Promise<NextResponse> {
-  const state = createInitialState(playerName);
+  const state = createInitialState(playerName, difficulty);
   const directions = getAvailableDirections(state);
 
   const engineResult = {

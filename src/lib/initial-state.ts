@@ -1,4 +1,4 @@
-import { GameState, Character } from "./types";
+import { GameState, Character, DifficultyMode } from "./types";
 import { floors, floorEntrance } from "./dungeon-data";
 import { starterWarriorEquip, starterRogueEquip, starterMageEquip, healPotion } from "./items";
 
@@ -13,7 +13,10 @@ function deepCloneDungeons() {
   }) as GameState["dungeons"];
 }
 
-export function createInitialState(playerName: string): GameState {
+export function createInitialState(
+  playerName: string,
+  mode: DifficultyMode = "normal"
+): GameState {
   const warrior: Character = {
     name: playerName,
     role: "warrior",
@@ -69,7 +72,7 @@ export function createInitialState(playerName: string): GameState {
       bossCounters: { curseTurn: 0, breathTurn: 0, breathCharging: false },
       turnCount: 0,
     },
-    mode: "normal",
+    mode,
     phase: "exploration",
     dungeons: deepCloneDungeons(),
     npcUsed: false,

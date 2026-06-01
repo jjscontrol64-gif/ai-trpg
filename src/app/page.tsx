@@ -7,6 +7,7 @@ import StatusWindow from "@/components/StatusWindow";
 import TRPGChoice from "@/components/TRPGChoice";
 import {
   ChoiceOption,
+  DifficultyMode,
   DiceRollResult,
   GameResponse,
   GameState,
@@ -191,7 +192,12 @@ export default function HomePage() {
     gameState?.phase !== "game_over" &&
     gameState?.phase !== "victory";
 
-  const handleStart = (name: string, apiKey: string, selectedModelPresetId: string) => {
+  const handleStart = (
+    name: string,
+    apiKey: string,
+    selectedModelPresetId: string,
+    difficulty: DifficultyMode
+  ) => {
     startTransition(async () => {
       try {
         setError(null);
@@ -199,6 +205,7 @@ export default function HomePage() {
           type: "start_game",
           playerName: name,
           modelPresetId: selectedModelPresetId,
+          difficulty,
           apiKey,
         });
 
