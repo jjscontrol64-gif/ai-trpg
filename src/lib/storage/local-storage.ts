@@ -1,4 +1,4 @@
-import { SAVE_SCHEMA_VERSION, SaveSnapshot, StorageProvider } from "./types";
+import { SaveSnapshot, StorageProvider, isSaveSnapshot } from "./types";
 
 const DEFAULT_SAVE_ID = "default";
 const KEY_PREFIX = "ai-trpg:save:";
@@ -11,21 +11,6 @@ function getStorage(): Storage | null {
 
 function getSaveKey(saveId = DEFAULT_SAVE_ID): string {
   return `${KEY_PREFIX}${saveId}`;
-}
-
-function isSaveSnapshot(value: unknown): value is SaveSnapshot {
-  if (!value || typeof value !== "object") return false;
-
-  const candidate = value as Partial<SaveSnapshot>;
-  return (
-    candidate.schemaVersion === SAVE_SCHEMA_VERSION &&
-    typeof candidate.saveId === "string" &&
-    typeof candidate.playerName === "string" &&
-    typeof candidate.savedAt === "string" &&
-    Array.isArray(candidate.beats) &&
-    Array.isArray(candidate.currentChoices) &&
-    Boolean(candidate.gameState)
-  );
 }
 
 export class LocalStorageProvider implements StorageProvider {

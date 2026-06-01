@@ -7,6 +7,7 @@ import {
 } from "../types";
 import { getEffectiveStat, performDiceCheck } from "./dice";
 import { bossesByFloor, monstersByDifficulty } from "../registry/game-registry";
+import { isBagUsable } from "../item-usage";
 
 export function spawnMonster(difficulty: 1 | 2 | 3): MonsterState {
   const pool = monstersByDifficulty[difficulty];
@@ -358,9 +359,7 @@ export function getCombatActions(state: GameState): PlayerAction[] {
     actions.push({ type: "flee", useSmokeBomb: true });
   }
 
-  const usableItems = state.party.inventory.filter(
-    (i) => i.effectId || i.hpRestore || i.allHpRestore || i.actionRestore
-  );
+  const usableItems = state.party.inventory.filter(isBagUsable);
   for (const item of usableItems) {
     actions.push({ type: "use_item", itemId: item.id });
   }

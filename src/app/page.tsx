@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import DiceResult from "@/components/DiceResult";
+import InventoryPanel from "@/components/InventoryPanel";
 import StartScreen from "@/components/StartScreen";
 import StatusWindow from "@/components/StatusWindow";
 import TRPGChoice from "@/components/TRPGChoice";
@@ -18,6 +19,7 @@ import {
 import { buildStatusWindow } from "@/lib/status";
 import {
   createStorageProvider,
+  isSaveSnapshot,
   SAVE_SCHEMA_VERSION,
   SaveSnapshot,
 } from "@/lib/storage";
@@ -27,6 +29,7 @@ const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
 const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
+type SaveImportStatus = "idle" | "imported" | "error";
 
 interface GameSnapshot {
   gameState: GameState;
@@ -104,6 +107,17 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createSaveFileName(playerName: string): string {
+  const safePlayerName = playerName
+    .trim()
+    .replace(/[^a-z0-9_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  const date = new Date().toISOString().slice(0, 10);
+
+  return `ai-trpg-${safePlayerName || "save"}-${date}.json`;
+}
+
 function getPhaseLabel(phase?: GameState["phase"]) {
   switch (phase) {
     case "combat":
@@ -148,6 +162,7 @@ export default function HomePage() {
   const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [importStatus, setImportStatus] = useState<SaveImportStatus>("idle");
   const [inspirationArmed, setInspirationArmed] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -275,6 +290,55 @@ export default function HomePage() {
         window.setTimeout(() => setSaveStatus("idle"), 1800);
       } catch {
         setSaveStatus("error");
+      }
+    });
+  };
+
+  const handleExportSave = () => {
+    if (!gameState || !playerName) return;
+
+    const snapshot: SaveSnapshot = {
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      saveId: DEFAULT_SAVE_ID,
+      playerName,
+      gameState,
+      beats,
+      currentChoices,
+      savedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = createSaveFileName(playerName);
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSave = (file: File) => {
+    startTransition(async () => {
+      try {
+        setImportStatus("idle");
+        const parsed = JSON.parse(await file.text()) as unknown;
+
+        if (!isSaveSnapshot(parsed)) {
+          setImportStatus("error");
+          return;
+        }
+
+        const snapshot: SaveSnapshot = {
+          ...parsed,
+          saveId: DEFAULT_SAVE_ID,
+        };
+
+        await storageProvider.save(snapshot);
+        setSavedSnapshot(snapshot);
+        setImportStatus("imported");
+      } catch {
+        setImportStatus("error");
       }
     });
   };
@@ -417,10 +481,12 @@ export default function HomePage() {
       <StartScreen
         onStart={handleStart}
         onResume={handleResume}
+        onImportSave={handleImportSave}
         loading={isPending}
         hasSave={Boolean(savedSnapshot)}
         savedPlayerName={savedSnapshot?.playerName}
         initialModelPresetId={modelPresetId}
+        importStatus={importStatus}
       />
     );
   }
@@ -470,6 +536,15 @@ export default function HomePage() {
                   : saveStatus === "error"
                     ? "Save failed"
                     : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportSave}
+                disabled={isPending}
+                className="rounded-full border border-white/8 bg-black/15 px-4 py-2 text-xs tracking-[0.14em] transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Export
               </button>
               <button
                 type="button"
@@ -634,6 +709,17 @@ export default function HomePage() {
               mina={statusWindow.mina}
               monster={statusWindow.monster}
               party={statusWindow.party}
+            />
+
+            <InventoryPanel
+              inventory={gameState.party.inventory}
+              members={gameState.party.members}
+              onUse={handleChoice}
+              disabled={
+                choiceSubmitStatus === "submitting" ||
+                gameState.phase === "victory" ||
+                gameState.phase === "game_over"
+              }
             />
 
             <section className="panel-shell">

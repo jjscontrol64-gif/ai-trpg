@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
 import { DifficultyMode } from "@/lib/types";
 
@@ -12,10 +12,12 @@ interface StartScreenProps {
     difficulty: DifficultyMode
   ) => void;
   onResume: (apiKey: string, modelPresetId: string) => void;
+  onImportSave: (file: File) => void;
   loading: boolean;
   hasSave: boolean;
   savedPlayerName?: string;
   initialModelPresetId: string;
+  importStatus: "idle" | "imported" | "error";
 }
 
 const DIFFICULTY_OPTIONS: {
@@ -31,15 +33,18 @@ const DIFFICULTY_OPTIONS: {
 export default function StartScreen({
   onStart,
   onResume,
+  onImportSave,
   loading,
   hasSave,
   savedPlayerName,
   initialModelPresetId,
+  importStatus,
 }: StartScreenProps) {
   const [name, setName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [modelPresetId, setModelPresetId] = useState(initialModelPresetId);
   const [difficulty, setDifficulty] = useState<DifficultyMode>("normal");
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const selectedModel =
     AI_MODEL_PRESETS.find((preset) => preset.id === modelPresetId) ??
     AI_MODEL_PRESETS[0];
@@ -94,6 +99,19 @@ export default function StartScreen({
         </section>
 
         <aside className="panel-shell">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                onImportSave(file);
+              }
+            }}
+          />
           {hasSave ? (
             <div
               className="mb-6 rounded-[1.5rem] border border-[color:rgba(191,143,74,0.28)] bg-black/10 p-5 text-left text-sm"
@@ -122,6 +140,33 @@ export default function StartScreen({
               </button>
             </div>
           ) : null}
+
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              disabled={loading}
+              className="w-full rounded-[1.2rem] border border-white/8 bg-black/15 px-4 py-3 text-sm font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Import Save File
+            </button>
+            {importStatus !== "idle" ? (
+              <p
+                className="mt-2 text-center text-xs"
+                style={{
+                  color:
+                    importStatus === "imported"
+                      ? "var(--accent-gold)"
+                      : "var(--text-muted)",
+                }}
+              >
+                {importStatus === "imported"
+                  ? "Imported"
+                  : "Invalid save file"}
+              </p>
+            ) : null}
+          </div>
 
           <div className="space-y-2">
             <p className="panel-kicker">Start Expedition</p>
