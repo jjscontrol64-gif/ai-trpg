@@ -34,6 +34,7 @@ import {
 } from "../items";
 import { floorEntrance } from "../dungeon-data";
 import { itemEffectsById } from "../registry/game-registry";
+import { canUseBagItem, getBagItemTargetIndex } from "../item-usage";
 
 type ActionHandlerMap = {
   [K in PlayerAction["type"]]: (
@@ -311,12 +312,57 @@ function processUseItem(
   targetIndex?: number
 ): EngineResult {
   const s = structuredClone(state);
+  const getNextActions = (nextState: GameState) =>
+    nextState.combat.active
+      ? getCombatActions(nextState)
+      : getAvailableDirections(nextState);
+  const unavailableResult = (eventSummary: string): EngineResult => ({
+    newState: s,
+    eventSummary,
+    nextActions: getNextActions(s),
+  });
   const itemIdx = s.party.inventory.findIndex((i) => i.id === itemId);
   if (itemIdx < 0) {
-    return { newState: s, eventSummary: "아이템을 찾을 수 없다.", nextActions: [] };
+    return unavailableResult("아이템을 찾을 수 없다.");
   }
 
   const item = s.party.inventory[itemIdx];
+  if (!canUseBagItem(item, s.party.members)) {
+    return unavailableResult("아이템을 사용할 수 없다.");
+  }
+
+  const restoresHp = Boolean(item.hpRestore || item.effectId === "restore_hp");
+  const restoresAction = Boolean(
+    item.actionRestore || item.effectId === "restore_action"
+  );
+  let resolvedTargetIndex = targetIndex ?? getBagItemTargetIndex(item, s.party.members);
+
+  if (targetIndex !== undefined) {
+    const member = s.party.members[targetIndex];
+    const hasActionDeficit = member?.actions.some(
+      (action) => action.remaining < action.max
+    );
+
+    if (
+      !member ||
+      member.hp <= 0 ||
+      (restoresHp && member.hp >= member.maxHp) ||
+      (restoresAction && !hasActionDeficit)
+    ) {
+      return unavailableResult("아이템 대상이 올바르지 않다.");
+    }
+
+    resolvedTargetIndex = targetIndex;
+  }
+
+  if ((restoresHp || restoresAction) && resolvedTargetIndex === undefined) {
+    return unavailableResult("아이템 대상이 올바르지 않다.");
+  }
+
+  if (item.effectId && !itemEffectsById[item.effectId]) {
+    return unavailableResult(`Item effect not found: ${item.effectId}`);
+  }
+
   s.party.inventory.splice(itemIdx, 1);
 
   if (item.effectId) {
@@ -329,11 +375,12 @@ function processUseItem(
       };
     }
 
-    const getNextActions = (nextState: GameState) =>
-      nextState.combat.active
-        ? getCombatActions(nextState)
-        : getAvailableDirections(nextState);
-    const result = effect.apply({ state: s, item, targetIndex, getNextActions });
+    const result = effect.apply({
+      state: s,
+      item,
+      targetIndex: resolvedTargetIndex,
+      getNextActions,
+    });
     return {
       newState: result.state,
       eventSummary: result.eventSummary,
@@ -344,7 +391,7 @@ function processUseItem(
   let summary = "";
 
   if (item.hpRestore) {
-    const target = targetIndex ?? 0;
+    const target = resolvedTargetIndex ?? 0;
     const member = s.party.members[target];
     member.hp = Math.min(member.maxHp, member.hp + item.hpRestore);
     summary = `${member.name}이(가) ${item.name} 사용. HP +${item.hpRestore} 회복.`;
@@ -354,7 +401,7 @@ function processUseItem(
     }
     summary = `${item.name} 사용. 전원 HP +${item.allHpRestore} 회복.`;
   } else if (item.actionRestore) {
-    const target = targetIndex ?? 0;
+    const target = resolvedTargetIndex ?? 0;
     const member = s.party.members[target];
     for (const action of member.actions) {
       action.remaining = Math.min(action.max, action.remaining + item.actionRestore);
