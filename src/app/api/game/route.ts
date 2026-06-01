@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GameState, PlayerAction, GameResponse } from "@/lib/types";
+import { GameState, PlayerAction, GameResponse, DifficultyMode } from "@/lib/types";
 import { processAction, getAvailableDirections, getTalkBiasedActions } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
-import { createAIProvider } from "@/lib/ai";
+import {
+  AIProviderModelNotFoundError,
+  AIProviderQuotaError,
+  AIProviderId,
+  InvalidApiKeyError,
+  MissingApiKeyError,
+  TemporaryAIProviderError,
+  createAIProvider,
+  resolveAIModelPreset,
+} from "@/lib/ai";
 import { mapChoicesToActions, ModelChoice, normalizeActionIndex } from "@/lib/action-options";
 
 type GameNarrationData = {
@@ -14,17 +23,24 @@ type GameNarrationData = {
 
 type ApiKeySession = {
   apiKey: string;
+  modelPresetId: string;
+  provider: AIProviderId;
+  model: string;
   expiresAt: number;
 };
 
-type ResolvedApiKey = {
+type ResolvedAIModel = {
   apiKey: string;
   apiKeySessionId: string;
+  modelPresetId: string;
+  provider: AIProviderId;
+  model: string;
 };
 
-const aiProvider = createAIProvider();
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
 const apiKeySessions = new Map<string, ApiKeySession>();
+
+class UnknownAIModelPresetError extends Error {}
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,23 +49,38 @@ export async function POST(req: NextRequest) {
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
     const apiKeySessionId =
       typeof body.apiKeySessionId === "string" ? body.apiKeySessionId : "";
-    const resolvedApiKey = resolveApiKey(apiKey, apiKeySessionId);
+    const modelPresetId =
+      typeof body.modelPresetId === "string" ? body.modelPresetId : "";
+
+    if (
+      type !== "start_game" &&
+      type !== "player_action" &&
+      type !== "talk"
+    ) {
+      return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
+    }
+
+    const resolvedAIModel = resolveAIModel(apiKey, apiKeySessionId, modelPresetId);
 
     if (type === "start_game") {
-      return handleStartGame(body.playerName, resolvedApiKey);
+      return await handleStartGame(
+        body.playerName,
+        parseDifficulty(body.difficulty),
+        resolvedAIModel
+      );
     }
 
     if (type === "player_action") {
-      return handlePlayerAction(
+      return await handlePlayerAction(
         body.gameState,
         body.action,
         body.choiceText,
-        resolvedApiKey
+        resolvedAIModel
       );
     }
 
     if (type === "talk") {
-      return handleTalk(body.gameState, resolvedApiKey);
+      return await handleTalk(body.gameState, resolvedAIModel);
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
@@ -57,7 +88,35 @@ export async function POST(req: NextRequest) {
     console.error("Game API error:", error);
     if (isMissingApiKeyError(error)) {
       return NextResponse.json(
-        { error: "Gemini API key is required." },
+        { error: "AI provider API key is required." },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof UnknownAIModelPresetError) {
+      return NextResponse.json(
+        { error: "Unknown AI model preset." },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof InvalidApiKeyError) {
+      return NextResponse.json(
+        { error: "AI provider API key is invalid or unauthorized." },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof AIProviderQuotaError) {
+      return NextResponse.json(
+        { error: "AI provider quota or billing limit has been exceeded." },
+        { status: 402 }
+      );
+    }
+
+    if (error instanceof AIProviderModelNotFoundError) {
+      return NextResponse.json(
+        { error: "Selected AI model is unavailable or not enabled for this API key." },
         { status: 400 }
       );
     }
@@ -79,14 +138,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function resolveApiKey(apiKey: string, apiKeySessionId: string): ResolvedApiKey {
-  if (apiKey) {
-    return {
-      apiKey,
-      apiKeySessionId: createApiKeySession(apiKey),
-    };
-  }
-
+function resolveAIModel(
+  apiKey: string,
+  apiKeySessionId: string,
+  modelPresetId: string
+): ResolvedAIModel {
   if (apiKeySessionId) {
     const session = apiKeySessions.get(apiKeySessionId);
     if (session && session.expiresAt > Date.now()) {
@@ -94,23 +150,52 @@ function resolveApiKey(apiKey: string, apiKeySessionId: string): ResolvedApiKey 
       return {
         apiKey: session.apiKey,
         apiKeySessionId,
+        modelPresetId: session.modelPresetId,
+        provider: session.provider,
+        model: session.model,
       };
     }
 
     apiKeySessions.delete(apiKeySessionId);
   }
 
+  const preset = resolveAIModelPreset(modelPresetId);
+  if (!preset) {
+    throw new UnknownAIModelPresetError();
+  }
+
+  if (apiKey) {
+    return {
+      apiKey,
+      apiKeySessionId: createApiKeySession(apiKey, preset.id),
+      modelPresetId: preset.id,
+      provider: preset.provider,
+      model: preset.model,
+    };
+  }
+
   return {
     apiKey: "",
     apiKeySessionId: "",
+    modelPresetId: preset.id,
+    provider: preset.provider,
+    model: preset.model,
   };
 }
 
-function createApiKeySession(apiKey: string): string {
+function createApiKeySession(apiKey: string, modelPresetId: string): string {
   pruneExpiredApiKeySessions();
+  const preset = resolveAIModelPreset(modelPresetId);
+  if (!preset) {
+    throw new UnknownAIModelPresetError();
+  }
+
   const sessionId = crypto.randomUUID();
   apiKeySessions.set(sessionId, {
     apiKey,
+    modelPresetId: preset.id,
+    provider: preset.provider,
+    model: preset.model,
     expiresAt: Date.now() + API_KEY_SESSION_TTL_MS,
   });
   return sessionId;
@@ -126,25 +211,23 @@ function pruneExpiredApiKeySessions(): void {
 }
 
 function isMissingApiKeyError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message === "Gemini API key is required for this request"
-  );
+  return error instanceof MissingApiKeyError;
 }
 
 function isTemporaryAIProviderError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return (
-    error.message.includes("Gemini API request failed (429)") ||
-    error.message.includes("Gemini API request failed (503)")
-  );
+  return error instanceof TemporaryAIProviderError;
+}
+
+function parseDifficulty(value: unknown): DifficultyMode {
+  return value === "easy" || value === "hard" ? value : "normal";
 }
 
 async function handleStartGame(
   playerName: string,
-  resolvedApiKey: ResolvedApiKey
+  difficulty: DifficultyMode,
+  resolvedAIModel: ResolvedAIModel
 ): Promise<NextResponse> {
-  const state = createInitialState(playerName);
+  const state = createInitialState(playerName, difficulty);
   const directions = getAvailableDirections(state);
 
   const engineResult = {
@@ -159,7 +242,7 @@ async function handleStartGame(
   const narrationData = await generateNarrationData(
     systemPrompt,
     [{ role: "user", content: userMessage }],
-    resolvedApiKey.apiKey
+    resolvedAIModel
   );
 
   const choices = mapChoicesToActions(narrationData.choices, directions);
@@ -171,7 +254,7 @@ async function handleStartGame(
     choices,
     gameState: state,
     statusWindow,
-    apiKeySessionId: resolvedApiKey.apiKeySessionId,
+    apiKeySessionId: resolvedAIModel.apiKeySessionId,
   };
 
   return NextResponse.json(response);
@@ -179,7 +262,7 @@ async function handleStartGame(
 
 async function handleTalk(
   gameState: GameState,
-  resolvedApiKey?: ResolvedApiKey
+  resolvedAIModel: ResolvedAIModel
 ): Promise<NextResponse> {
   if (
     !gameState ||
@@ -194,8 +277,7 @@ async function handleTalk(
     );
   }
 
-  const apiKey = resolvedApiKey?.apiKey;
-  const apiKeySessionId = resolvedApiKey?.apiKeySessionId;
+  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const actions = getTalkBiasedActions(gameState);
   const engineResult = {
     newState: gameState,
@@ -216,7 +298,7 @@ async function handleTalk(
     },
   ];
 
-  const narrationData = await generateNarrationData(systemPrompt, messages, apiKey);
+  const narrationData = await generateNarrationData(systemPrompt, messages, resolvedAIModel);
   const choices = mapChoicesToActions(narrationData.choices, actions);
 
   return NextResponse.json({
@@ -233,15 +315,18 @@ async function handlePlayerAction(
   gameState: GameState,
   action: PlayerAction,
   choiceText?: string,
-  resolvedApiKey?: ResolvedApiKey
+  resolvedAIModel?: ResolvedAIModel
 ): Promise<NextResponse> {
-  const apiKey = resolvedApiKey?.apiKey;
-  const apiKeySessionId = resolvedApiKey?.apiKeySessionId;
+  if (!resolvedAIModel) {
+    throw new UnknownAIModelPresetError();
+  }
+
+  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const engineResult = processAction(gameState, action);
   const { newState } = engineResult;
 
   if (newState.phase === "game_over") {
-    const endNarration = await getEndingNarration(newState, "defeat", choiceText, apiKey);
+    const endNarration = await getEndingNarration(newState, "defeat", resolvedAIModel, choiceText);
     return NextResponse.json({
       narration: endNarration,
       eventSummary: engineResult.eventSummary,
@@ -254,7 +339,7 @@ async function handlePlayerAction(
   }
 
   if (newState.phase === "victory") {
-    const endNarration = await getEndingNarration(newState, "victory", choiceText, apiKey);
+    const endNarration = await getEndingNarration(newState, "victory", resolvedAIModel, choiceText);
     return NextResponse.json({
       narration: endNarration,
       eventSummary: engineResult.eventSummary,
@@ -277,7 +362,7 @@ async function handlePlayerAction(
     { role: "user" as const, content: buildUserMessage(engineResult, choiceText) },
   ];
 
-  const narrationData = await generateNarrationData(systemPrompt, messages, apiKey);
+  const narrationData = await generateNarrationData(systemPrompt, messages, resolvedAIModel);
 
   newState.messageHistory.push(
     { role: "user", content: choiceText || engineResult.eventSummary },
@@ -310,11 +395,13 @@ async function handlePlayerAction(
 async function generateNarrationData(
   systemPrompt: string,
   messages: { role: "user" | "assistant"; content: string }[],
-  apiKey?: string
+  resolvedAIModel: ResolvedAIModel
 ): Promise<GameNarrationData> {
+  const aiProvider = createAIProvider(resolvedAIModel.provider);
   const text = await aiProvider.generateText(systemPrompt, messages, {
-    apiKey,
-    responseMimeType: "application/json",
+    apiKey: resolvedAIModel.apiKey,
+    model: resolvedAIModel.model,
+    json: true,
   });
 
   const parsed = parseNarrationData(text);
@@ -452,8 +539,8 @@ function fallbackChoices(): GameNarrationData["choices"] {
 async function getEndingNarration(
   state: GameState,
   type: "victory" | "defeat",
-  lastAction?: string,
-  apiKey?: string
+  resolvedAIModel: ResolvedAIModel,
+  lastAction?: string
 ): Promise<string> {
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
@@ -465,11 +552,17 @@ async function getEndingNarration(
 세션을 마친 피나·미나가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
+  const aiProvider = createAIProvider(resolvedAIModel.provider);
+
   return aiProvider.generateText(systemPrompt, [
     {
       role: "user",
       content: `전사: ${state.party.members[0].name}, 현재 ${state.party.floor}층. ${lastAction || ""}. 엔딩 나레이션을 해주세요. 텍스트만 반환하세요 (JSON 아님).`,
     },
-  ], { apiKey });
+  ], {
+    apiKey: resolvedAIModel.apiKey,
+    model: resolvedAIModel.model,
+    json: false,
+  });
 
 }

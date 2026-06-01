@@ -8,15 +8,16 @@ import {
   TemporaryAIProviderError,
 } from "./types";
 
-const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-const RETRYABLE_STATUS_CODES = new Set([429, 503]);
+const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+const RETRYABLE_STATUS_CODES = new Set([429, 503, 529]);
 const INVALID_API_KEY_STATUS_CODES = new Set([401, 403]);
 const MAX_RETRY_COUNT = 2;
-const GEMINI_MAX_OUTPUT_TOKENS = Number(process.env.GEMINI_MAX_OUTPUT_TOKENS ?? 4096);
+const CLAUDE_MAX_OUTPUT_TOKENS = Number(process.env.CLAUDE_MAX_OUTPUT_TOKENS ?? 4096);
+const JSON_INSTRUCTION =
+  "Return only a valid JSON object. Do not wrap it in markdown fences or add commentary.";
 
-type GeminiRole = "user" | "model";
-
-export class GeminiProvider implements AIProvider {
+export class ClaudeProvider implements AIProvider {
   async generateText(
     systemPrompt: string,
     messages: AIMessage[],
@@ -29,37 +30,31 @@ export class GeminiProvider implements AIProvider {
     }
 
     const requestBody = JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      contents: messages.map((message) => ({
-        role: toGeminiRole(message.role),
-        parts: [{ text: message.content }],
-      })),
-      generationConfig: {
-        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-        temperature: 0.8,
-        responseMimeType: options.json ? "application/json" : "text/plain",
-      },
+      model: options.model,
+      max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
+      system: options.json
+        ? `${systemPrompt}\n\n${JSON_INSTRUCTION}`
+        : systemPrompt,
+      messages: normalizeClaudeMessages(messages),
     });
 
     for (let attempt = 0; attempt <= MAX_RETRY_COUNT; attempt++) {
-      const response = await fetch(
-        `${GEMINI_API_BASE_URL}/models/${options.model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
+      const response = await fetch(CLAUDE_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": ANTHROPIC_VERSION,
+        },
+        body: requestBody,
+      });
 
       if (response.ok) {
         const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts
-          ?.map((part: { text?: string }) => part.text ?? "")
+        const text = data?.content
+          ?.map((block: { type?: string; text?: string }) =>
+            block.type === "text" ? block.text ?? "" : ""
+          )
           .join("");
 
         if (!text) {
@@ -96,8 +91,28 @@ export class GeminiProvider implements AIProvider {
   }
 }
 
-function toGeminiRole(role: AIMessage["role"]): GeminiRole {
-  return role === "assistant" ? "model" : "user";
+function normalizeClaudeMessages(messages: AIMessage[]): AIMessage[] {
+  const normalized: AIMessage[] = [];
+
+  for (const message of messages) {
+    const previous = normalized[normalized.length - 1];
+
+    if (previous?.role === message.role) {
+      previous.content = `${previous.content}\n\n${message.content}`;
+      continue;
+    }
+
+    normalized.push({ ...message });
+  }
+
+  if (normalized[0]?.role === "assistant") {
+    normalized.unshift({
+      role: "user",
+      content: "Continue the game from the previous conversation context.",
+    });
+  }
+
+  return normalized;
 }
 
 function delay(ms: number): Promise<void> {
@@ -115,7 +130,6 @@ async function readResponseBody(response: Response): Promise<string> {
 function isInvalidApiKeyResponse(status: number, body: string): boolean {
   return (
     INVALID_API_KEY_STATUS_CODES.has(status) ||
-    (status === 400 &&
-      /api[_ -]?key|API_KEY_INVALID|unauthorized|permission/i.test(body))
+    (status === 400 && /api[_ -]?key|auth|unauthorized|permission/i.test(body))
   );
 }

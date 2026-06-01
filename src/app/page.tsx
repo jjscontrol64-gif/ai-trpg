@@ -7,6 +7,7 @@ import StatusWindow from "@/components/StatusWindow";
 import TRPGChoice from "@/components/TRPGChoice";
 import {
   ChoiceOption,
+  DifficultyMode,
   DiceRollResult,
   GameResponse,
   GameState,
@@ -20,9 +21,11 @@ import {
   SAVE_SCHEMA_VERSION,
   SaveSnapshot,
 } from "@/lib/storage";
+import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
 
 const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
+const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 
 interface GameSnapshot {
@@ -140,7 +143,8 @@ export default function HomePage() {
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [previousSnapshot, setPreviousSnapshot] = useState<GameSnapshot | null>(null);
   const [playerName, setPlayerName] = useState("");
-  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [modelPresetId, setModelPresetId] = useState(DEFAULT_MODEL_PRESET_ID);
   const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
@@ -188,18 +192,26 @@ export default function HomePage() {
     gameState?.phase !== "game_over" &&
     gameState?.phase !== "victory";
 
-  const handleStart = (name: string, apiKey: string) => {
+  const handleStart = (
+    name: string,
+    apiKey: string,
+    selectedModelPresetId: string,
+    difficulty: DifficultyMode
+  ) => {
     startTransition(async () => {
       try {
         setError(null);
         const response = await postGame<GameResponse>({
           type: "start_game",
           playerName: name,
+          modelPresetId: selectedModelPresetId,
+          difficulty,
           apiKey,
         });
 
         setPlayerName(name);
-        setGeminiApiKey("");
+        setAiApiKey("");
+        setModelPresetId(selectedModelPresetId);
         setApiKeySessionId(response.apiKeySessionId ?? "");
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
@@ -223,7 +235,7 @@ export default function HomePage() {
     });
   };
 
-  const handleResume = (apiKey: string) => {
+  const handleResume = (apiKey: string, selectedModelPresetId: string) => {
     if (!savedSnapshot) return;
 
     setError(null);
@@ -231,7 +243,8 @@ export default function HomePage() {
     setLastSubmittedChoice(null);
     setPreviousSnapshot(null);
     setPlayerName(savedSnapshot.playerName);
-    setGeminiApiKey(apiKey);
+    setAiApiKey(apiKey);
+    setModelPresetId(selectedModelPresetId);
     setApiKeySessionId("");
     setGameState(savedSnapshot.gameState);
     setStatusWindow(buildStatusWindow(savedSnapshot.gameState));
@@ -311,10 +324,11 @@ export default function HomePage() {
           action: submittedChoice.action,
           choiceText: submittedChoice.text,
           apiKeySessionId,
-          apiKey: apiKeySessionId ? undefined : geminiApiKey,
+          modelPresetId,
+          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
 
-        setGeminiApiKey("");
+        setAiApiKey("");
         setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
@@ -356,10 +370,11 @@ export default function HomePage() {
           type: "talk",
           gameState,
           apiKeySessionId,
-          apiKey: apiKeySessionId ? undefined : geminiApiKey,
+          modelPresetId,
+          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
 
-        setGeminiApiKey("");
+        setAiApiKey("");
         setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
@@ -405,6 +420,7 @@ export default function HomePage() {
         loading={isPending}
         hasSave={Boolean(savedSnapshot)}
         savedPlayerName={savedSnapshot?.playerName}
+        initialModelPresetId={modelPresetId}
       />
     );
   }

@@ -16,7 +16,9 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(npx tsc *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(node ./node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(npm test *)"
     ],
     "deny": [
       "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\\\.env\")",
