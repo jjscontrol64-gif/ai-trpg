@@ -5,6 +5,8 @@ import {
   DifficultyMode,
   Character,
   StatType,
+  Affinity,
+  AffinityLevel,
 } from "./types";
 import { MAX_PROMPT_ACTIONS } from "./action-options";
 import { getDirectionLabel } from "./engine/movement";
@@ -29,8 +31,18 @@ const STAT_LABELS: Record<StatType, string> = {
   int: "INT",
 };
 
+// 호감도 단계별 "분위기"만 제시한다. 고정 대사 스크립트는 두지 않고(결정 #3),
+// LLM이 이 무드를 footing 삼아 클래식 왕도 JRPG 풍 동료 유대 톤으로 대화를 만든다.
+const AFFINITY_MOOD: Record<AffinityLevel, string> = {
+  0: "아직 서먹하고 예의를 차리는, 거리감이 있는 사이",
+  1: "조금씩 마음을 열고 편해지기 시작한 사이",
+  2: "서로를 신뢰하고 농담도 주고받는 가까운 사이",
+  3: "무엇이든 털어놓을 수 있는 깊은 유대로 맺어진 사이",
+};
+
 type UserMessageOptions = {
   talkBiased?: boolean;
+  affinityTalk?: { target: keyof Affinity };
 };
 
 export function buildSystemPrompt(state: GameState): string {
@@ -66,8 +78,9 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 - 피나 (도적): HP ${pina.hp}/${pina.maxHp}
 - 미나 (마법사): HP ${mina.hp}/${mina.maxHp}
 
-## 동료 호감도
-- 피나: ${affinity.pina}단계 / 미나: ${affinity.mina}단계
+## 동료 호감도 (0~3단계)
+- 피나: ${affinity.pina}단계 — ${AFFINITY_MOOD[affinity.pina]}
+- 미나: ${affinity.mina}단계 — ${AFFINITY_MOOD[affinity.mina]}
 - 호감도가 높은 동료일수록 플레이어에게 더 친밀하고 마음을 여는 말투로 대화에 참여시키세요.
 - 단, 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고 과한 연애 묘사는 피하세요.
 - "대화하기"는 상태 변화 없는 일반 대화입니다. "안전지대 호감도 대화"는 엔진이 호감도를 올리는 별도 이벤트입니다.
@@ -124,7 +137,21 @@ export function buildUserMessage(
     msg += `actionIndex=${i}: ${describeAction(actions[i], members)}\n`;
   }
 
-  if (options.talkBiased) {
+  if (options.affinityTalk) {
+    const { target } = options.affinityTalk;
+    const targetName = target === "pina" ? "피나" : "미나";
+    const tier = normalizeAffinity(engineResult.newState.party.affinity)[target];
+    const capped = tier >= 3;
+
+    msg += `\n이번 장면은 플레이어(전사)가 안전지대에서 ${targetName}과 단둘이 나누는 1:1 대화입니다.`;
+    msg += `\n- ${targetName}의 성격과 말투를 살려, 설명조가 아닌 진솔하게 주고받는 대화로 묘사하세요.`;
+    msg += `\n- 현재 ${targetName}의 호감도는 ${tier}단계(${AFFINITY_MOOD[tier]})입니다. 이 거리감을 대사와 분위기에 반영하세요.`;
+    msg += capped
+      ? `\n- 이미 더없이 깊은 유대를 쌓았으니, 호감도를 더 끌어올리려 애쓰기보다 그 신뢰가 자연스레 묻어나는 장면으로 그리세요.`
+      : `\n- 방문할 때마다 화제를 바꿔 신선하게 만드세요: 지난 전투의 회고, 소소한 농담, 서로의 과거나 꿈, 걱정과 격려 등에서 골라보세요.`;
+    msg += `\n- 전투·판정·자원 변화·몬스터 행동은 일어나지 않습니다. 대화 그 자체에 무게를 두세요.`;
+    msg += `\n- 나레이션의 무게중심은 대화에 두되, 이어서 플레이어가 움직일 수 있도록 가능한 행동(이동 등)으로 3개의 선택지를 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 값을 그대로 넣으세요.`;
+  } else if (options.talkBiased) {
     msg += `\n이번 응답은 플레이어가 동료들과 대화하며 다음 행동을 다시 고르는 장면입니다. 상태 변화, 다이스 판정, 자원 소모, 몬스터 행동은 일어나지 않습니다. 피나와 미나의 대화를 중심으로 짧게 묘사하고, 가능한 행동 중 탐색 스킬(패스파인딩, 연금생성)이 있으면 선택지에 최소 1개 포함하세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요.`;
   } else {
     msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;

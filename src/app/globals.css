@@ -265,6 +265,11 @@ a {
 .chip-affinity{flex:none;font-size:.62rem;color:#f3a7b5;background:rgba(243,167,181,0.08);border:1px solid rgba(243,167,181,0.16);border-radius:.45rem;padding:.08rem .35rem;white-space:nowrap;}
 .chip-stats{font-size:.6rem;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .chip-skill{font-size:.56rem;color:var(--accent-gold);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:8rem;}
+/* HUD 칩 세로 포트레이트 아바타 */
+.chip{align-items:stretch;}
+.pav{flex:none;width:3rem;border-radius:.6rem;overflow:hidden;position:relative;background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.4));border:1px solid rgba(255,255,255,0.08);}
+.pav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transform:scale(1.2);transform-origin:top center;}
+.chip-body{justify-content:center;}
 
 /* stage: narration ↔ command */
 .stage{flex:1;min-height:0;display:flex;gap:14px;}

@@ -3,9 +3,9 @@
 import { StatusWindowData } from "@/lib/types";
 
 const SLOTS = [
-  { key: "warrior", icon: "⚔️", role: "전사", color: "var(--accent-gold)" },
-  { key: "pina", icon: "🗡️", role: "도적", color: "var(--accent-ember)" },
-  { key: "mina", icon: "🔮", role: "마법사", color: "var(--accent-blue)" },
+  { key: "warrior", icon: "⚔️", img: "/images/characters/warrior.png", pos: "48% 12%", role: "전사", color: "var(--accent-gold)" },
+  { key: "pina", icon: "🗡️", img: "/images/characters/fina.png", pos: "50% 8%", role: "도적", color: "var(--accent-ember)" },
+  { key: "mina", icon: "🔮", img: "/images/characters/mina.png", pos: "46% 14%", role: "마법사", color: "var(--accent-blue)" },
 ] as const;
 
 function hpPct(hp: string) {
@@ -41,7 +41,15 @@ export default function PartyHud({
           const cls = pct > 60 ? "hp-high" : pct > 30 ? "hp-mid" : "hp-low";
           return (
             <div className="chip" key={s.key}>
-              <span className="av">{s.icon}</span>
+              <span className="pav">
+                <img
+                  src={s.img}
+                  alt={c.name}
+                  style={{ objectPosition: s.pos }}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
               <div className="chip-body">
                 <div className="chip-top">
                   <span className="chip-nm">{c.name}</span>

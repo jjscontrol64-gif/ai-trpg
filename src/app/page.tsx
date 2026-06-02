@@ -509,6 +509,9 @@ export default function HomePage() {
                 ? "Save failed"
                 : "Save"}
           </button>
+          <button className="pill" onClick={handleExportSave} disabled={isPending}>
+            Export
+          </button>
           <button
             className="pill"
             onClick={handleBack}

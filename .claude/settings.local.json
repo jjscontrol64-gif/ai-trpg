@@ -24,7 +24,8 @@
       "Bash(cd C:Workswebsiteai-trpg *)",
       "Bash(npm run *)",
       "Bash(npx eslint *)",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('eslint dep:', \\(p.devDependencies||{}\\).eslint, \\(p.devDependencies||{}\\)['eslint-config-next']\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('eslint dep:', \\(p.devDependencies||{}\\).eslint, \\(p.devDependencies||{}\\)['eslint-config-next']\\)\")",
+      "Bash(node .node_modulestypescriptbintsc *)"
     ],
     "deny": [
       "Bash(cmd /c \"dir C:\\\\Works\\\\claude\\\\ai-trpg\\\\\\.env\")",

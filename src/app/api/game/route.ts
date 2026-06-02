@@ -390,7 +390,16 @@ async function handlePlayerAction(
       role: m.role as "user" | "assistant",
       content: m.content,
     })),
-    { role: "user" as const, content: buildUserMessage(engineResult, choiceText) },
+    {
+      role: "user" as const,
+      content: buildUserMessage(
+        engineResult,
+        choiceText,
+        action.type === "affinity_talk"
+          ? { affinityTalk: { target: action.target } }
+          : {}
+      ),
+    },
   ];
 
   const narrationData = await generateNarrationData(systemPrompt, messages, resolvedAIModel);
