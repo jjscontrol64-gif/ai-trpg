@@ -68,17 +68,21 @@ export default function PartyHud({
                   <span className="chip-hp-v">{c.hp}</span>
                 </div>
                 <div className="chip-meta">
-                  <span className="chip-stats">
+                  <div className="chip-meta-row chip-meta-stats">
+                    <span className="chip-stats">
                     💪{c.str} · 🏃{c.dex} · 💡{c.int}
-                  </span>
-                  {c.affinity ? (
+                    </span>
+                  </div>
+                  <div className="chip-meta-row chip-meta-detail">
+                    {c.affinity ? (
                     <span className="chip-affinity" title="호감도">
                       {c.affinity}
                     </span>
                   ) : null}
-                  <span className="chip-skill" title={c.skill}>
-                    {c.skill}
-                  </span>
+                    <span className="chip-skill" title={c.skill}>
+                      {c.skill}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

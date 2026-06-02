@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공격 이펙트 데모 · 클래스별 동적 연출</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./attack-fx.css">
+<style>
+  :root{
+    --bg-card:rgba(18,22,31,0.78);
+    --text-primary:#f3ead8; --text-secondary:#c8bca5; --text-muted:#8f8470;
+    --accent-gold:#d7ac61; --accent-red:#d26557; --accent-green:#67bf81;
+    --accent-blue:#79a4da; --accent-ember:#d88a57; --accent-violet:#b08ad9; --border-color:rgba(203,173,118,0.16);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;color:var(--text-primary);letter-spacing:-0.01em;
+    font-family:"Noto Sans KR","Segoe UI",sans-serif;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:1.3rem;padding:1.5rem;
+    background:
+      radial-gradient(circle at top,rgba(215,172,97,0.10),transparent 34%),
+      radial-gradient(circle at bottom right,rgba(53,94,166,0.12),transparent 28%),
+      linear-gradient(180deg,#0b0f17 0%,#090b10 55%,#06080d 100%);
+    background-attachment:fixed;overflow-x:hidden;}
+  .panel{border:1px solid var(--border-color);border-radius:1.3rem;
+    background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)),var(--bg-card);
+    box-shadow:0 22px 50px rgba(0,0,0,0.35);}
+  .kick{font-size:.6rem;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin:0;}
+  .lead{text-align:center;max-width:600px;}
+  .lead h1{font-family:Georgia,serif;color:var(--accent-gold);font-weight:600;font-size:1.5rem;margin:.3rem 0 .4rem;}
+  .lead p{color:var(--text-secondary);font-size:.86rem;line-height:1.7;margin:0;}
+
+  /* ===== 전투 무대 ===== */
+  .fx-arena{position:relative;width:min(680px,94vw);height:340px;overflow:hidden;border-radius:1.3rem;}
+  .arena-bg{position:absolute;inset:0;
+    background:
+      radial-gradient(circle at 50% 30%,rgba(120,20,20,0.22),transparent 60%),
+      repeating-linear-gradient(115deg,rgba(255,255,255,0.015) 0 2px,transparent 2px 26px),
+      linear-gradient(180deg,#171019,#0c0710);}
+
+  .fx-target{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);
+    width:128px;height:128px;display:flex;align-items:center;justify-content:center;z-index:4;}
+  .fx-target .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(210,101,87,0.35);
+    box-shadow:0 0 40px rgba(210,101,87,0.25) inset;}
+  .fx-target .glyph{font-size:4.6rem;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6));}
+
+  .bosshp{position:absolute;left:50%;top:18%;transform:translateX(-50%);width:60%;z-index:5;text-align:center;}
+  .bosshp .nm{font-size:.7rem;font-weight:700;color:var(--accent-red);letter-spacing:.05em;}
+  .bosshp .bar{margin-top:.3rem;height:.45rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;}
+  .bosshp .fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#c25648,#ef7d6c);
+    transition:width .5s cubic-bezier(.4,0,.2,1);}
+  .bosshp .v{margin-top:.25rem;font-size:.6rem;color:var(--text-secondary);font-variant-numeric:tabular-nums;font-family:"JetBrains Mono",monospace;}
+
+  .fx-layer{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;}
+
+  /* ===== 커맨드 ===== */
+  .cmd-group{display:flex;flex-direction:column;gap:.5rem;align-items:center;}
+  .cmd-label{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--text-muted);}
+  .commands{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;}
+  .atk{display:flex;flex-direction:column;align-items:flex-start;gap:.2rem;cursor:pointer;
+    border:1px solid var(--border-color);border-radius:.9rem;padding:.7rem .95rem;min-width:142px;
+    background:rgba(0,0,0,0.2);color:inherit;font-family:inherit;transition:.16s;text-align:left;}
+  .atk:hover:not(:disabled){border-color:rgba(215,172,97,0.5);background:rgba(215,172,97,0.08);transform:translateY(-2px);}
+  .atk:disabled{opacity:.4;cursor:default;}
+  .atk .who{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;font-weight:700;}
+  .atk .mv{font-size:.92rem;font-weight:600;}
+  .atk .desc{font-size:.6rem;color:var(--text-muted);}
+  .atk.skill{border-style:dashed;}
+  .atk.warrior .who{color:var(--accent-gold);}
+  .atk.rogue .who{color:var(--accent-ember);}
+  .atk.mage .who{color:var(--accent-blue);}
+  .reset{font-size:.74rem;color:var(--text-secondary);background:rgba(0,0,0,0.18);
+    border:1px solid rgba(255,255,255,0.1);border-radius:.7rem;padding:.55rem 1rem;cursor:pointer;font-family:inherit;}
+  .note{font-size:.66rem;color:var(--text-muted);text-align:center;max-width:600px;line-height:1.7;}
+  .note code{font-family:"JetBrains Mono",monospace;color:var(--accent-gold);font-size:.62rem;
+    background:rgba(215,172,97,0.08);padding:.05rem .3rem;border-radius:.3rem;}
+</style>
+</head>
+<body>
+  <div class="lead">
+    <p class="kick">Combat FX · Engine Demo</p>
+    <h1>클래스별 공격 이펙트 엔진</h1>
+    <p>스타일과 엔진을 <code>fx/attack-fx.css</code> · <code>fx/attack-fx.js</code>로 분리했습니다. 새 이펙트는 <code>AttackFX.register()</code> 한 줄로 추가됩니다.</p>
+  </div>
+
+  <div class="panel fx-arena" id="arena">
+    <div class="arena-bg"></div>
+    <div class="bosshp">
+      <div class="nm">💀 보스 · 리치</div>
+      <div class="bar"><span class="fill" id="bossFill" style="width:100%"></span></div>
+      <div class="v" id="bossV">HP 25 / 25</div>
+    </div>
+    <div class="fx-target" id="target">
+      <div class="ring"></div>
+      <div class="glyph">💀</div>
+    </div>
+    <div class="fx-layer" id="fxLayer"></div>
+  </div>
+
+  <div class="cmd-group">
+    <span class="cmd-label">기본 공격</span>
+    <div class="commands">
+      <button class="atk warrior" data-fx="slash" data-min="6" data-max="10">
+        <span class="who">⚔️ 전사 · 아르곤</span><span class="mv">강렬한 일격</span><span class="desc">베기 · 참격</span>
+      </button>
+      <button class="atk rogue" data-fx="stab" data-min="4" data-max="7">
+        <span class="who">🗡️ 도적 · 피나</span><span class="mv">급소 찌르기</span><span class="desc">관통 · 연속</span>
+      </button>
+      <button class="atk mage" data-fx="magic" data-min="8" data-max="13">
+        <span class="who">🔮 마법사 · 미나</span><span class="mv">비전 폭발</span><span class="desc">마법진 · 폭발</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="cmd-group">
+    <span class="cmd-label">스킬</span>
+    <div class="commands">
+      <button class="atk skill warrior" data-fx="smash" data-min="12" data-max="18" data-crit="0.5">
+        <span class="who">⚔️ 강타</span><span class="mv">내려찍기</span><span class="desc">충격파 · 강진동</span>
+      </button>
+      <button class="atk skill rogue" data-fx="ambush" data-min="9" data-max="14" data-crit="1">
+        <span class="who">🗡️ 암습</span><span class="mv">그림자 일격</span><span class="desc">암전 · 필중 치명</span>
+      </button>
+      <button class="atk skill mage" data-fx="bind" data-min="1" data-max="3" data-status="true">
+        <span class="who">🔮 속박</span><span class="mv">마력 사슬</span><span class="desc">속박 2턴 부여</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="reset" id="resetBtn">↺ 보스 HP · 상태 리셋</button>
+  <p class="note">실제 게임에선 GM 응답의 <code>{직업/스킬, 데미지, 치명타}</code>를 그대로 <code>fx.play(name, opts)</code>에 넘기면 됩니다.</p>
+
+<script src="./attack-fx.js"></script>
+<script>
+  const COLORS = { slash:'#ffe9bd', smash:'#ffe9bd', stab:'#cfeeff', ambush:'#c79bff', magic:'#bcd6ff', bind:'#bcd6ff' };
+  const MAX = 25;
+  let hp = MAX;
+
+  const arena   = document.getElementById('arena');
+  const target  = document.getElementById('target');
+  const fxLayer = document.getElementById('fxLayer');
+  const bossFill = document.getElementById('bossFill');
+  const bossV    = document.getElementById('bossV');
+
+  const fx = AttackFX.create({ arena, target, fxLayer });
+
+  function applyDamage(o){
+    hp = Math.max(0, hp - (o.damage || 0));
+    bossFill.style.width = (hp / MAX * 100) + '%';
+    bossV.textContent = `HP ${hp} / ${MAX}`;
+    if (hp <= 0) defeated();
+  }
+
+  function defeated(){
+    setTimeout(()=>{
+      const g = target.querySelector('.glyph');
+      g.textContent = '☠️'; g.style.opacity = '.4';
+      target.classList.remove('fx-bound');
+      fx.ctx.statusText('격파!', '#ffd98a');
+    }, 350);
+  }
+
+  function attack(btn){
+    if (hp <= 0) return;
+    const name = btn.dataset.fx;
+    const lo = +btn.dataset.min, hi = +btn.dataset.max;
+    const critChance = btn.dataset.crit != null ? +btn.dataset.crit : 0.3;
+    const crit = Math.random() < critChance;
+    let damage = AttackFX.rand(lo, hi);
+    if (crit) damage = Math.round(damage * 1.6);
+
+    fx.play(name, {
+      damage, crit, color: COLORS[name],
+      turns: 2,
+      onImpact: applyDamage
+    });
+  }
+
+  document.querySelectorAll('.atk').forEach(b => b.addEventListener('click', () => attack(b)));
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    hp = MAX;
+    bossFill.style.width = '100%';
+    bossV.textContent = `HP ${MAX} / ${MAX}`;
+    target.classList.remove('fx-bound');
+    const g = target.querySelector('.glyph');
+    g.textContent = '💀'; g.style.opacity = '1';
+  });
+</script>
+</body>
+</html>
