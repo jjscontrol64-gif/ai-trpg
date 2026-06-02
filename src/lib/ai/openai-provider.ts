@@ -41,7 +41,7 @@ export class OpenAIProvider implements AIProvider {
         },
         ...messages,
       ],
-      max_tokens: OPENAI_MAX_OUTPUT_TOKENS,
+      max_completion_tokens: OPENAI_MAX_OUTPUT_TOKENS,
       temperature: 0.8,
     });
 
