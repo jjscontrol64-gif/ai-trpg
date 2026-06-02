@@ -8,6 +8,12 @@ export const AI_MODEL_PRESETS: AIModelPreset[] = [
     model: "gemini-2.5-flash",
   },
   {
+    id: "gemini-2.5-pro",
+    provider: "gemini",
+    label: "Gemini 2.5 Pro",
+    model: "gemini-2.5-pro",
+  },
+  {
     id: "gemini-3.1-pro-preview",
     provider: "gemini",
     label: "Gemini 3.1 Pro Preview",
