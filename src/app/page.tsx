@@ -17,6 +17,7 @@ import {
   StoryBeat,
 } from "@/lib/types";
 import { buildStatusWindow } from "@/lib/status";
+import { normalizeGameState } from "@/lib/state-normalization";
 import {
   createStorageProvider,
   isSaveSnapshot,
@@ -262,8 +263,9 @@ export default function HomePage() {
     setAiApiKey(apiKey);
     setModelPresetId(selectedModelPresetId);
     setApiKeySessionId("");
-    setGameState(savedSnapshot.gameState);
-    setStatusWindow(buildStatusWindow(savedSnapshot.gameState));
+    const normalizedGameState = normalizeGameState(savedSnapshot.gameState);
+    setGameState(normalizedGameState);
+    setStatusWindow(buildStatusWindow(normalizedGameState));
     setCurrentChoices(savedSnapshot.currentChoices);
     setBeats(savedSnapshot.beats);
     setInspirationArmed(false);
@@ -333,6 +335,7 @@ export default function HomePage() {
         const snapshot: SaveSnapshot = {
           ...parsed,
           saveId: DEFAULT_SAVE_ID,
+          gameState: normalizeGameState(parsed.gameState),
         };
 
         await storageProvider.save(snapshot);

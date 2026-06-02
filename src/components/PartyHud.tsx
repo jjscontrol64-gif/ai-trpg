@@ -63,6 +63,11 @@ export default function PartyHud({
                   <span className="chip-stats">
                     💪{c.str} · 🏃{c.dex} · 💡{c.int}
                   </span>
+                  {c.affinity ? (
+                    <span className="chip-affinity" title="호감도">
+                      {c.affinity}
+                    </span>
+                  ) : null}
                   <span className="chip-skill" title={c.skill}>
                     {c.skill}
                   </span>

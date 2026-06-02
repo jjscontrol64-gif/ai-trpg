@@ -58,6 +58,9 @@ const actionHandlers = {
   npc_interact: (state) => processNpc(state),
   pathfinding: (state) => processPathfinding(state),
   alchemy: (state) => processAlchemy(state),
+  affinity_talk: (state, action) => processAffinityTalk(state, action.target),
+  leave_safe_room: (state) => processLeaveSafeRoom(state),
+  ending_choice: (state, action) => processEndingChoice(state, action.choiceId),
 } satisfies ActionHandlerMap;
 
 type RoomHandlerContext = {
@@ -178,10 +181,11 @@ function handleSafeRoom(
     }
   }
 
+  state.phase = "event";
   return {
     newState: state,
-    eventSummary: `${col}${row}로 이동. ⛺ 안전지대. 전원 HP +5 회복.`,
-    nextActions: getAvailableDirections(state),
+    eventSummary: `${col}${row}로 이동. ⛺ 안전지대. 전원 HP +5 회복. 동료와 조용히 이야기할 수 있다.`,
+    nextActions: buildSafeRoomActions(),
   };
 }
 
@@ -705,6 +709,49 @@ function processAlchemy(state: GameState): EngineResult {
   };
 }
 
+function processAffinityTalk(
+  state: GameState,
+  target: "pina" | "mina"
+): EngineResult {
+  const s = structuredClone(state);
+  const current = s.party.affinity[target];
+  s.party.affinity[target] = Math.min(3, current + 1) as 0 | 1 | 2 | 3;
+  s.phase = "exploration";
+
+  const targetName = target === "pina" ? "피나" : "미나";
+  const capped = current === 3;
+  return {
+    newState: s,
+    eventSummary: capped
+      ? `${targetName}와 안전지대에서 마음을 나눴다. 이미 깊은 신뢰를 쌓은 상태다.`
+      : `${targetName}와 안전지대에서 대화했다. ${targetName}의 호감도가 ${s.party.affinity[target]}단계가 되었다.`,
+    nextActions: getAvailableDirections(s),
+  };
+}
+
+function processLeaveSafeRoom(state: GameState): EngineResult {
+  const s = structuredClone(state);
+  s.phase = "exploration";
+  return {
+    newState: s,
+    eventSummary: "안전지대에서 휴식을 마치고 다시 길을 나선다.",
+    nextActions: getAvailableDirections(s),
+  };
+}
+
+function processEndingChoice(
+  state: GameState,
+  choiceId: string
+): EngineResult {
+  const s = structuredClone(state);
+  s.phase = "victory";
+  return {
+    newState: s,
+    eventSummary: `정복 엔딩 후일담 선택: ${choiceId}`,
+    nextActions: [],
+  };
+}
+
 function autoEquip(
   state: GameState,
   equip: import("../types").EquipItem
@@ -799,6 +846,10 @@ function getCurrentNonCombatActions(state: GameState): PlayerAction[] {
           isUnorthodox: false,
         },
       ];
+    }
+
+    if (room?.type === "safe") {
+      return buildSafeRoomActions();
     }
   }
 
@@ -917,6 +968,14 @@ function buildTrapActions(state: GameState): PlayerAction[] {
   }
 
   return actions;
+}
+
+function buildSafeRoomActions(): PlayerAction[] {
+  return [
+    { type: "affinity_talk", target: "pina" },
+    { type: "affinity_talk", target: "mina" },
+    { type: "leave_safe_room" },
+  ];
 }
 
 export { getAvailableDirections } from "./movement";

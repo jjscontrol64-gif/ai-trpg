@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GameState, PlayerAction, GameResponse, DifficultyMode } from "@/lib/types";
+import { ChoiceOption, GameState, PlayerAction, GameResponse, DifficultyMode } from "@/lib/types";
 import { processAction, getAvailableDirections, getTalkBiasedActions } from "@/lib/engine";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
+import { normalizeGameState } from "@/lib/state-normalization";
 import {
   AIProviderModelNotFoundError,
   AIProviderQuotaError,
@@ -264,12 +265,19 @@ async function handleTalk(
   gameState: GameState,
   resolvedAIModel: ResolvedAIModel
 ): Promise<NextResponse> {
+  if (!gameState) {
+    return NextResponse.json(
+      { error: "대화하기는 비전투 진행 중에만 사용할 수 있습니다." },
+      { status: 400 }
+    );
+  }
+
+  const normalizedState = normalizeGameState(gameState);
   if (
-    !gameState ||
-    gameState.combat.active ||
-    gameState.phase === "combat" ||
-    gameState.phase === "game_over" ||
-    gameState.phase === "victory"
+    normalizedState.combat.active ||
+    normalizedState.phase === "combat" ||
+    normalizedState.phase === "game_over" ||
+    normalizedState.phase === "victory"
   ) {
     return NextResponse.json(
       { error: "대화하기는 비전투 진행 중에만 사용할 수 있습니다." },
@@ -278,15 +286,15 @@ async function handleTalk(
   }
 
   const apiKeySessionId = resolvedAIModel.apiKeySessionId;
-  const actions = getTalkBiasedActions(gameState);
+  const actions = getTalkBiasedActions(normalizedState);
   const engineResult = {
-    newState: gameState,
+    newState: normalizedState,
     eventSummary: "동료들과 잠시 의견을 나누며 다음 행동을 다시 가늠한다.",
     nextActions: actions,
   };
 
-  const systemPrompt = buildSystemPrompt(gameState);
-  const history = gameState.messageHistory.slice(-10);
+  const systemPrompt = buildSystemPrompt(normalizedState);
+  const history = normalizedState.messageHistory.slice(-10);
   const messages = [
     ...history.map((m) => ({
       role: m.role as "user" | "assistant",
@@ -305,8 +313,8 @@ async function handleTalk(
     narration: narrationData.narration,
     eventSummary: engineResult.eventSummary,
     choices,
-    gameState,
-    statusWindow: buildStatusWindow(gameState),
+    gameState: normalizedState,
+    statusWindow: buildStatusWindow(normalizedState),
     apiKeySessionId,
   } satisfies GameResponse);
 }
@@ -320,10 +328,32 @@ async function handlePlayerAction(
   if (!resolvedAIModel) {
     throw new UnknownAIModelPresetError();
   }
+  if (!gameState) {
+    return NextResponse.json({ error: "Invalid game state" }, { status: 400 });
+  }
 
   const apiKeySessionId = resolvedAIModel.apiKeySessionId;
-  const engineResult = processAction(gameState, action);
+  const normalizedState = normalizeGameState(gameState);
+  const engineResult = processAction(normalizedState, action);
   const { newState } = engineResult;
+
+  if (action.type === "ending_choice") {
+    const endingNarration = await getEndingChoiceNarration(
+      newState,
+      action.choiceId,
+      resolvedAIModel,
+      choiceText
+    );
+    return NextResponse.json({
+      narration: endingNarration,
+      eventSummary: engineResult.eventSummary,
+      choices: [],
+      gameState: newState,
+      statusWindow: buildStatusWindow(newState),
+      diceResult: engineResult.diceResult,
+      apiKeySessionId,
+    } satisfies GameResponse);
+  }
 
   if (newState.phase === "game_over") {
     const endNarration = await getEndingNarration(newState, "defeat", resolvedAIModel, choiceText);
@@ -340,10 +370,11 @@ async function handlePlayerAction(
 
   if (newState.phase === "victory") {
     const endNarration = await getEndingNarration(newState, "victory", resolvedAIModel, choiceText);
+    const choices = buildEndingChoices(newState);
     return NextResponse.json({
       narration: endNarration,
       eventSummary: engineResult.eventSummary,
-      choices: [],
+      choices,
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
@@ -542,10 +573,12 @@ async function getEndingNarration(
   resolvedAIModel: ResolvedAIModel,
   lastAction?: string
 ): Promise<string> {
+  const affinity = state.party.affinity;
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
 레드드래곤을 물리친 후, 시점이 TRPG 테이블로 전환됩니다.
 피나와 미나가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
+동료 호감도는 피나 ${affinity.pina}단계, 미나 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
 고풍스러운 판타지 문체에서 현실의 따뜻한 톤으로 자연스럽게 전환하세요.`
     : `당신은 TRPG 게임 마스터입니다. 패배 엔딩을 연출하세요.
 파티가 전멸했습니다. 시점이 TRPG 테이블로 전환됩니다.
@@ -565,4 +598,71 @@ async function getEndingNarration(
     json: false,
   });
 
+}
+
+function buildEndingChoices(state: GameState): ChoiceOption[] {
+  const choices: ChoiceOption[] = [];
+  const { affinity } = state.party;
+
+  if (affinity.pina >= 3) {
+    choices.push({
+      label: "🗡️ 피나 — 약속의 후일담",
+      text: "피나와 오늘 모험 뒤의 약속을 나눈다.",
+      action: { type: "ending_choice", choiceId: "pina_promise" },
+    });
+  }
+
+  if (affinity.mina >= 3) {
+    choices.push({
+      label: "🔮 미나 — 조용한 후일담",
+      text: "미나와 세션이 남긴 의미를 차분히 되짚는다.",
+      action: { type: "ending_choice", choiceId: "mina_reflection" },
+    });
+  }
+
+  choices.push({
+    label: "🎲 모두 — 세션 마무리",
+    text: "피나와 미나와 함께 오늘의 세션을 따뜻하게 마무리한다.",
+    action: { type: "ending_choice", choiceId: "shared_table" },
+  });
+
+  return choices.slice(0, 3);
+}
+
+async function getEndingChoiceNarration(
+  state: GameState,
+  choiceId: string,
+  resolvedAIModel: ResolvedAIModel,
+  lastAction?: string
+): Promise<string> {
+  const focus = {
+    pina_promise:
+      "피나가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
+    mina_reflection:
+      "미나가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
+    shared_table:
+      "피나와 미나가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
+  }[choiceId] ?? "파티가 함께 정복 세션을 마무리하는 공통 후일담";
+
+  const systemPrompt = `당신은 TRPG 게임 마스터입니다. 정복 엔딩 이후의 짧은 후일담 에필로그를 작성하세요.
+선택된 후일담: ${focus}.
+동료 호감도는 피나 ${state.party.affinity.pina}단계, 미나 ${state.party.affinity.mina}단계입니다.
+세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고, 과한 연애 묘사는 피하세요.
+텍스트만 반환하세요. JSON은 반환하지 마세요.`;
+
+  const aiProvider = createAIProvider(resolvedAIModel.provider);
+  return aiProvider.generateText(
+    systemPrompt,
+    [
+      {
+        role: "user",
+        content: `전사: ${state.party.members[0].name}. 플레이어 선택: ${lastAction || choiceId}. 2~4문단의 후일담을 작성하세요.`,
+      },
+    ],
+    {
+      apiKey: resolvedAIModel.apiKey,
+      model: resolvedAIModel.model,
+      json: false,
+    }
+  );
 }

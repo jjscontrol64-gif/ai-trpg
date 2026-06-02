@@ -65,6 +65,7 @@ export function createInitialState(
       floor: 1,
       position: { ...entrance },
       inspiration: 1,
+      affinity: { pina: 0, mina: 0 },
     },
     combat: {
       active: false,

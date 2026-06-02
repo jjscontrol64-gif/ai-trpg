@@ -7,6 +7,7 @@ import {
   Character,
 } from "./types";
 import { roomTypeEmoji } from "./dungeon-data";
+import { normalizeAffinity } from "./state-normalization";
 
 function formatStat(base: number, equip: Character["equip"], stat: "str" | "dex" | "int"): string {
   let bonus = 0;
@@ -19,7 +20,14 @@ function formatStat(base: number, equip: Character["equip"], stat: "str" | "dex"
   return bonus > 0 ? `${base}+${bonus}` : `${base}`;
 }
 
-function formatCharacter(char: Character): CharacterStatusDisplay {
+function formatAffinity(level: 0 | 1 | 2 | 3): string {
+  return `${"♥".repeat(level)}${"♡".repeat(3 - level)} ${level}/3`;
+}
+
+function formatCharacter(
+  char: Character,
+  affinity?: 0 | 1 | 2 | 3
+): CharacterStatusDisplay {
   return {
     name: char.name,
     hp: `${char.hp}/${char.maxHp}`,
@@ -34,6 +42,7 @@ function formatCharacter(char: Character): CharacterStatusDisplay {
       char.equip.body?.name ?? "없음",
       char.equip.weapon?.name ?? "없음",
     ],
+    affinity: affinity === undefined ? undefined : formatAffinity(affinity),
   };
 }
 
@@ -93,10 +102,11 @@ function formatParty(state: GameState): PartyStatusDisplay {
 }
 
 export function buildStatusWindow(state: GameState): StatusWindowData {
+  const affinity = normalizeAffinity(state.party.affinity);
   return {
     warrior: formatCharacter(state.party.members[0]),
-    pina: formatCharacter(state.party.members[1]),
-    mina: formatCharacter(state.party.members[2]),
+    pina: formatCharacter(state.party.members[1], affinity.pina),
+    mina: formatCharacter(state.party.members[2], affinity.mina),
     monster: formatMonster(state),
     party: formatParty(state),
   };

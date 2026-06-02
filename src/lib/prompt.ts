@@ -9,6 +9,7 @@ import {
 import { MAX_PROMPT_ACTIONS } from "./action-options";
 import { getDirectionLabel } from "./engine/movement";
 import { getEffectiveStat } from "./engine/dice";
+import { normalizeAffinity } from "./state-normalization";
 
 const MODE_LABELS: Record<DifficultyMode, string> = {
   easy: "😎 이지",
@@ -35,6 +36,7 @@ type UserMessageOptions = {
 export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
   const [warrior, pina, mina] = party.members;
+  const affinity = normalizeAffinity(party.affinity);
 
   return `당신은 클래식 왕도 JRPG 풍 중세 판타지 세계의 게임 마스터(GM)입니다.
 플레이어가 콘솔 RPG 게임의 주인공이 된 듯한 몰입감을 주는 것이 당신의 역할입니다.
@@ -64,11 +66,17 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 - 피나 (도적): HP ${pina.hp}/${pina.maxHp}
 - 미나 (마법사): HP ${mina.hp}/${mina.maxHp}
 
+## 동료 호감도
+- 피나: ${affinity.pina}단계 / 미나: ${affinity.mina}단계
+- 호감도가 높은 동료일수록 플레이어에게 더 친밀하고 마음을 여는 말투로 대화에 참여시키세요.
+- 단, 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고 과한 연애 묘사는 피하세요.
+- "대화하기"는 상태 변화 없는 일반 대화입니다. "안전지대 호감도 대화"는 엔진이 호감도를 올리는 별도 이벤트입니다.
+
 ## 응답 규칙
 1. narration: 내레이션 텍스트. 피나·미나의 대사를 자연스럽게 포함.
 2. choices: 정확히 3개의 선택지를 생성. 각 선택지는 actionIndex(아래 가능한 행동의 actionIndex 숫자), label(짧은 키워드), text(시도 묘사문)를 포함.
 3. 가능한 행동에는 수행 캐릭터와 능력치가 "이름(역할, 스탯 값)" 형태로 표시됩니다. 판정·전투 행동은 해당 능력치가 가장 높은 캐릭터를 우선 선택하세요. (예: 고대 문자 해독 등 지능 판정은 INT가 높은 미나, 힘 판정은 전사, 민첩 판정은 피나)
-4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 미나 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요.
+4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 미나 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요. 단, "휴식하고 길을 나선다"처럼 특정 캐릭터가 수행하지 않는 선택지는 명령형 라벨로 작성해도 됩니다.
 5. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
 6. 선택지는 제공된 가능한 행동 목록에 대응해야 하며, actionIndex는 반드시 선택한 행동의 값을 그대로 사용하세요.
 7. JSON 형식으로만 응답하세요.
@@ -170,6 +178,14 @@ function describeAction(action: PlayerAction, members: Character[]): string {
       return "패스파인딩 — 피나";
     case "alchemy":
       return "연금생성 — 미나";
+    case "affinity_talk":
+      return action.target === "pina"
+        ? "안전지대 호감도 대화 — 피나와 대화하고 피나의 호감도 +1(최대 3)"
+        : "안전지대 호감도 대화 — 미나와 대화하고 미나의 호감도 +1(최대 3)";
+    case "leave_safe_room":
+      return "안전지대 떠나기 — 호감도 변화 없이 휴식을 마치고 이동 선택으로 복귀";
+    case "ending_choice":
+      return `정복 엔딩 후일담 선택 — ${action.choiceId}`;
     default:
       return "알 수 없는 행동";
   }

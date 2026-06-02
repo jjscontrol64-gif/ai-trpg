@@ -111,6 +111,12 @@ export default function PartyDrawer({
                   </span>
                 </div>
                 <div className="dchar-skill">{c.skill}</div>
+                {c.affinity ? (
+                  <div className="dchar-affinity">
+                    <span>호감도</span>
+                    <strong>{c.affinity}</strong>
+                  </div>
+                ) : null}
                 <div className="dchar-equip">
                   {EQUIP_LABELS.map((label, i) => (
                     <div className="dchar-equip-row" key={label}>

@@ -1,4 +1,5 @@
 import { SaveSnapshot, StorageProvider, isSaveSnapshot } from "./types";
+import { normalizeGameState } from "../state-normalization";
 
 const DEFAULT_SAVE_ID = "default";
 const KEY_PREFIX = "ai-trpg:save:";
@@ -23,7 +24,9 @@ export class LocalStorageProvider implements StorageProvider {
 
     try {
       const parsed = JSON.parse(raw) as unknown;
-      return isSaveSnapshot(parsed) ? parsed : null;
+      return isSaveSnapshot(parsed)
+        ? { ...parsed, gameState: normalizeGameState(parsed.gameState) }
+        : null;
     } catch {
       return null;
     }
@@ -35,6 +38,7 @@ export class LocalStorageProvider implements StorageProvider {
 
     const trimmedSnapshot: SaveSnapshot = {
       ...snapshot,
+      gameState: normalizeGameState(snapshot.gameState),
       beats: snapshot.beats.slice(-MAX_STORED_BEATS),
     };
 
