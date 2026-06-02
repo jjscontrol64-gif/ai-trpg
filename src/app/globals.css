@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./attack-fx.css";
 
 :root {
   --bg-primary: #090b10;

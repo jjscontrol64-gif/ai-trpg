@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import CommandMenu from "@/components/CommandMenu";
 import PartyDrawer from "@/components/PartyDrawer";
 import PartyHud from "@/components/PartyHud";
-import ScriptStage from "@/components/ScriptStage";
+import ScriptStage, { AttackFxEvent } from "@/components/ScriptStage";
 import StartScreen from "@/components/StartScreen";
 import {
   ChoiceOption,
@@ -31,6 +31,15 @@ const DEFAULT_SAVE_ID = "default";
 const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 type SaveImportStatus = "idle" | "imported" | "error";
+
+const ATTACK_FX_COLORS: Record<string, string> = {
+  slash: "#ffe9bd",
+  smash: "#ffe9bd",
+  stab: "#cfeeff",
+  ambush: "#c79bff",
+  magic: "#bcd6ff",
+  bind: "#bcd6ff",
+};
 
 interface GameSnapshot {
   gameState: GameState;
@@ -145,6 +154,53 @@ function getModeLabel(mode?: GameState["mode"]) {
   }
 }
 
+function getAttackEffectName(action: PlayerAction, state: GameState): string | null {
+  if (action.type === "attack") {
+    const role = state.party.members[action.characterIndex]?.role;
+
+    if (role === "warrior") return "slash";
+    if (role === "rogue") return "stab";
+    if (role === "mage") return "magic";
+  }
+
+  if (action.type === "special_action") {
+    if (action.actionName === "강타") return "smash";
+    if (action.actionName === "암습") return "ambush";
+    if (action.actionName === "마력속박") return "bind";
+  }
+
+  return null;
+}
+
+function createAttackFxEvent(
+  action: PlayerAction,
+  previousState: GameState,
+  response: GameResponse
+): AttackFxEvent | null {
+  const effect = getAttackEffectName(action, previousState);
+
+  if (!effect || !previousState.combat.monster) {
+    return null;
+  }
+
+  const nextMonster = response.gameState.combat.monster;
+  const damage = Math.max(
+    0,
+    previousState.combat.monster.hp - (nextMonster?.hp ?? 0)
+  );
+  const crit =
+    response.diceResult?.judgment === "critical_success" || effect === "ambush";
+
+  return {
+    id: createId(),
+    effect,
+    damage,
+    crit,
+    color: ATTACK_FX_COLORS[effect] ?? "#fff",
+    turns: effect === "bind" ? 2 : undefined,
+  };
+}
+
 export default function HomePage() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +222,7 @@ export default function HomePage() {
   const [importStatus, setImportStatus] = useState<SaveImportStatus>("idle");
   const [inspirationArmed, setInspirationArmed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [attackFxEvent, setAttackFxEvent] = useState<AttackFxEvent | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -237,6 +294,7 @@ export default function HomePage() {
         setLastSubmittedChoice(null);
         setPreviousSnapshot(null);
         setInspirationArmed(false);
+        setAttackFxEvent(null);
         setBeats([
           {
             id: createId(),
@@ -269,6 +327,7 @@ export default function HomePage() {
     setCurrentChoices(savedSnapshot.currentChoices);
     setBeats(savedSnapshot.beats);
     setInspirationArmed(false);
+    setAttackFxEvent(null);
   };
 
   const handleSave = () => {
@@ -395,6 +454,11 @@ export default function HomePage() {
           modelPresetId,
           apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
+        const nextAttackFxEvent = createAttackFxEvent(
+          submittedChoice.action,
+          gameState,
+          response
+        );
 
         setAiApiKey("");
         setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
@@ -403,6 +467,7 @@ export default function HomePage() {
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
         setLastSubmittedChoice(null);
+        setAttackFxEvent(nextAttackFxEvent);
         setBeats((prev) => [
           ...prev,
           {
@@ -448,6 +513,7 @@ export default function HomePage() {
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
+        setAttackFxEvent(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -477,6 +543,7 @@ export default function HomePage() {
     setLastSubmittedChoice(null);
     setPreviousSnapshot(null);
     setInspirationArmed(false);
+    setAttackFxEvent(null);
     setError(null);
   };
 
@@ -532,6 +599,7 @@ export default function HomePage() {
           monster={statusWindow.monster}
           isPending={isPending}
           logRef={logRef}
+          attackFxEvent={attackFxEvent}
         />
         <CommandMenu
           choices={currentChoices}
