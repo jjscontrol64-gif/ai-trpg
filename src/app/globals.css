@@ -353,6 +353,8 @@ a {
   .hud{flex-direction:column;}
   .hud-meta{flex-direction:row;align-items:center;flex-wrap:wrap;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);padding:0 0 .6rem;}
   .hud-chips{grid-template-columns:1fr;}      /* 칩 세로 스택 */
-  .scriptline{grid-template-columns:64px 1fr;gap:.6rem;}
+  .scriptline{grid-template-columns:44px 1fr;gap:.45rem;}
+  .scriptline .who{font-size:.56rem;letter-spacing:.04em;}
+  .scriptline .said{font-size:.9rem;line-height:1.72;}
   .beat-summary{margin-left:0;}
 }
