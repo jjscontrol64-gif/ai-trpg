@@ -19,6 +19,12 @@ export type RoomType =
   | "entrance";
 export type Floor = 1 | 2 | 3;
 export type StatType = "str" | "dex" | "int";
+export type AffinityLevel = 0 | 1 | 2 | 3;
+
+export interface Affinity {
+  pina: AffinityLevel;
+  mina: AffinityLevel;
+}
 
 export interface EquipItem {
   id: string;
@@ -93,6 +99,7 @@ export interface Party {
   floor: Floor;
   position: { col: string; row: number };
   inspiration: number;
+  affinity: Affinity;
 }
 
 export interface RoomData {
@@ -164,6 +171,7 @@ export interface CharacterStatusDisplay {
   int: string;
   skill: string;
   equip: [string, string, string];
+  affinity?: string;
 }
 
 export interface MonsterStatusDisplay {
@@ -205,7 +213,10 @@ export type PlayerAction =
     }
   | { type: "npc_interact" }
   | { type: "pathfinding" }
-  | { type: "alchemy" };
+  | { type: "alchemy" }
+  | { type: "affinity_talk"; target: keyof Affinity }
+  | { type: "leave_safe_room" }
+  | { type: "ending_choice"; choiceId: string };
 
 export interface EngineResult {
   newState: GameState;

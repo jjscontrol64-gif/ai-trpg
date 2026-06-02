@@ -36,6 +36,7 @@ function createState(roomType: RoomType = "empty", inspiration = 0): GameState {
       floor: 1,
       position: { col: "A", row: 1 },
       inspiration,
+      affinity: { pina: 0, mina: 0 },
     },
     combat: {
       active: true,
