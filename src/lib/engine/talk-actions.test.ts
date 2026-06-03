@@ -35,8 +35,8 @@ describe("getTalkBiasedActions", () => {
     expect(actions).toEqual([
       { type: "pathfinding" },
       { type: "alchemy" },
-      { type: "affinity_talk", target: "pina" },
-      { type: "affinity_talk", target: "mina" },
+      { type: "affinity_talk", target: "amy" },
+      { type: "affinity_talk", target: "siluella" },
       { type: "leave_safe_room" },
     ]);
   });
@@ -47,23 +47,23 @@ describe("getTalkBiasedActions", () => {
 
     const result = processAction(state, {
       type: "affinity_talk",
-      target: "pina",
+      target: "amy",
     });
 
-    expect(result.newState.party.affinity).toEqual({ pina: 1, mina: 0 });
+    expect(result.newState.party.affinity).toEqual({ amy: 1, siluella: 0 });
     expect(result.newState.phase).toBe("exploration");
     expect(result.nextActions.some((action) => action.type === "move")).toBe(true);
   });
 
   it("caps affinity at level 3", () => {
     const state = createInitialState("테스터");
-    state.party.affinity.pina = 3;
+    state.party.affinity.amy = 3;
 
     const result = processAction(state, {
       type: "affinity_talk",
-      target: "pina",
+      target: "amy",
     });
 
-    expect(result.newState.party.affinity.pina).toBe(3);
+    expect(result.newState.party.affinity.amy).toBe(3);
   });
 });

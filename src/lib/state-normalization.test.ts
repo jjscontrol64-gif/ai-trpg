@@ -15,7 +15,22 @@ describe("normalizeGameState", () => {
 
     const normalized = normalizeGameState(legacyState);
 
-    expect(normalized.party.affinity).toEqual({ pina: 0, mina: 0 });
+    expect(normalized.party.affinity).toEqual({ amy: 0, siluella: 0 });
+  });
+
+  it("migrates legacy companion affinity keys", () => {
+    const state = createInitialState("Tester");
+    const legacyState = {
+      ...state,
+      party: {
+        ...state.party,
+        affinity: { pina: 2, mina: 1 },
+      },
+    } as unknown as GameState;
+
+    const normalized = normalizeGameState(legacyState);
+
+    expect(normalized.party.affinity).toEqual({ amy: 2, siluella: 1 });
   });
 
   it("backfills missing consumable effects for older saves", () => {

@@ -40,7 +40,7 @@ function createState(): GameState {
       floor: 1,
       position: { col: "A", row: 1 },
       inspiration: 0,
-      affinity: { pina: 0, mina: 0 },
+      affinity: { amy: 0, siluella: 0 },
     },
     combat: {
       active: false,

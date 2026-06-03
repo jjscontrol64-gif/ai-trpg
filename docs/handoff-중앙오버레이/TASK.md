@@ -44,8 +44,8 @@ handoff-중앙오버레이/
   `CommandMenu`의 `emptyMessage`)은 수정/삭제하지 않는다.
 - 새 상태값을 만들지 않는다. 기존 `statusWindow`(StatusWindowData)와
   `choiceSubmitStatus` 만 사용한다.
-- 이미지 경로는 레포에 이미 있는 `/images/characters/{warrior,fina,mina}.png` 를 쓴다.
-  (`StatusWindowData` 키는 `warrior`/`pina`/`mina` 지만 이미지 파일은 `fina.png` 임에 주의 —
+- 이미지 경로는 레포에 이미 있는 `/images/characters/{warrior,amy,siluella}.png` 를 쓴다.
+  (`StatusWindowData` 키는 `warrior`/`amy`/`siluella` 와 일치한다 —
   ConferOverlay 의 SEATS 매핑이 이미 분리 처리함.)
 - 새 npm 의존성 없음.
 

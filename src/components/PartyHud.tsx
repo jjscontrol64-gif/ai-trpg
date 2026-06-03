@@ -26,8 +26,8 @@ const PLAY_TYPE = {
 
 const SLOTS = [
   { key: "warrior", icon: "⚔️", img: "/images/characters/warrior.png", pos: "48% 12%", role: "전사", color: "var(--accent-gold)" },
-  { key: "pina", icon: "🗡️", img: "/images/characters/fina.png", pos: "50% 8%", role: "도적", color: "var(--accent-ember)" },
-  { key: "mina", icon: "🔮", img: "/images/characters/mina.png", pos: "46% 14%", role: "마법사", color: "var(--accent-blue)" },
+  { key: "amy", icon: "🗡️", img: "/images/characters/amy.png", pos: "50% 8%", role: "도적", color: "var(--accent-ember)" },
+  { key: "siluella", icon: "🔮", img: "/images/characters/siluella.png", pos: "46% 14%", role: "마법사", color: "var(--accent-blue)" },
 ] as const;
 
 function hpPct(hp: string) {

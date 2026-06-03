@@ -30,7 +30,7 @@ export function createInitialState(
     ],
   };
 
-  const pina: Character = {
+  const amy: Character = {
     name: "에이미",
     role: "rogue",
     hp: 10,
@@ -43,7 +43,7 @@ export function createInitialState(
     ],
   };
 
-  const mina: Character = {
+  const siluella: Character = {
     name: "실루엘라",
     role: "mage",
     hp: 10,
@@ -60,12 +60,12 @@ export function createInitialState(
 
   return {
     party: {
-      members: [warrior, pina, mina],
+      members: [warrior, amy, siluella],
       inventory: [healPotion(), healPotion()],
       floor: 1,
       position: { ...entrance },
       inspiration: 1,
-      affinity: { pina: 0, mina: 0 },
+      affinity: { amy: 0, siluella: 0 },
     },
     combat: {
       active: false,

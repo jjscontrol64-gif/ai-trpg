@@ -93,7 +93,7 @@ const sounds = {
       return (thump + body + grit) * env;
     });
   },
-  "fina-stab.wav": () => {
+  "amy-stab.wav": () => {
     const noise = seededNoise(37);
     return render(0.22, (t, d) => {
       const env = envelope(t, d, 0.002, 0.08);
@@ -102,7 +102,7 @@ const sounds = {
       return (point + snap) * env;
     });
   },
-  "fina-backstab.wav": () => {
+  "amy-backstab.wav": () => {
     const noise = seededNoise(41);
     return render(0.42, (t, d) => {
       const env = envelope(t, d, 0.004, 0.16);
@@ -112,7 +112,7 @@ const sounds = {
       return (whisper + sting + low) * env;
     });
   },
-  "mina-arcane-bolt.wav": () => {
+  "siluella-arcane-bolt.wav": () => {
     const notes = [523.25, 783.99, 1046.5];
     return render(0.55, (t, d) => {
       const env = envelope(t, d, 0.015, 0.22);
@@ -124,7 +124,7 @@ const sounds = {
       return arpeggio * 0.24 * env;
     });
   },
-  "mina-arcane-bind.wav": () => {
+  "siluella-arcane-bind.wav": () => {
     const noise = seededNoise(59);
     return render(0.68, (t, d) => {
       const env = envelope(t, d, 0.02, 0.28);

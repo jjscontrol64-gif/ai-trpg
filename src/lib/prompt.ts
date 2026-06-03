@@ -56,7 +56,7 @@ const COORDINATE_DIRECTION_RULES = `Coordinate direction rules:
 
 export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
-  const [warrior, pina, mina] = party.members;
+  const [warrior, amy, siluella] = party.members;
   const affinity = normalizeAffinity(party.affinity);
 
 //   return `당신은 클래식 왕도 JRPG 풍 중세 판타지 세계의 게임 마스터(GM)입니다.
@@ -84,12 +84,12 @@ export function buildSystemPrompt(state: GameState): string {
 
 // ## 파티 상태
 // - ${warrior.name} (전사): HP ${warrior.hp}/${warrior.maxHp}
-// - 에이미 (도적): HP ${pina.hp}/${pina.maxHp}
-// - 실루엘라 (마법사): HP ${mina.hp}/${mina.maxHp}
+// - 에이미 (도적): HP ${amy.hp}/${amy.maxHp}
+// - 실루엘라 (마법사): HP ${siluella.hp}/${siluella.maxHp}
 
 // ## 동료 호감도 (0~3단계)
-// - 에이미: ${affinity.pina}단계 — ${AFFINITY_MOOD[affinity.pina]}
-// - 실루엘라: ${affinity.mina}단계 — ${AFFINITY_MOOD[affinity.mina]}
+// - 에이미: ${affinity.amy}단계 — ${AFFINITY_MOOD[affinity.amy]}
+// - 실루엘라: ${affinity.siluella}단계 — ${AFFINITY_MOOD[affinity.siluella]}
 // - 호감도가 높은 동료일수록 플레이어에게 더 친밀하고 마음을 여는 말투로 대화에 참여시키세요.
 // - 단, 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고 과한 연애 묘사는 피하세요.
 // - "대화하기"는 상태 변화 없는 일반 대화입니다. "안전지대 호감도 대화"는 엔진이 호감도를 올리는 별도 이벤트입니다.
@@ -118,8 +118,8 @@ export function buildSystemPrompt(state: GameState): string {
 
 ## 캐릭터
 - ${warrior.name}(전사/리더): 플레이어. 용맹함.
-- 에이미(도적/ENFP): 활달, 반말. 오렌지 단발/청안. (변수: pina)
-- 실루엘라(법사/INTJ): 차분/논리, 존댓말. 은발/청안. (변수: mina)
+- 에이미(도적/ENFP): 활달, 반말. 오렌지 단발/청안. (변수: amy)
+- 실루엘라(법사/INTJ): 차분/논리, 존댓말. 은발/청안. (변수: siluella)
 - 린린(NPC/법사/ISFJ): 소심/공손, 존댓말. 보라 장발/로브. 2층 특정 상황만 등장.
 
 ## 지침
@@ -131,8 +131,8 @@ export function buildSystemPrompt(state: GameState): string {
 - 난이도: ${MODE_LABELS[state.mode]} | 층: ${party.floor}층 | 위치: ${party.position.col}${party.position.row}
 - 영감: ${"★".repeat(party.inspiration)}${"☆".repeat(3 - party.inspiration)}
 - 전투: ${state.combat.active ? "예" : "아니오"} ${state.combat.monster ? `(- 몬스터: ${state.combat.monster.name} HP: ${state.combat.monster.hp}/${state.combat.monster.maxHp})` : ""}
-- 파티 HP: ${warrior.name} ${warrior.hp}/${warrior.maxHp} | 에이미 ${pina.hp}/${pina.maxHp} | 실루엘라 ${mina.hp}/${mina.maxHp}
-- 호감도(0~3): 에이미 ${affinity.pina}(${AFFINITY_MOOD[affinity.pina]}) | 실루엘라 ${affinity.mina}(${AFFINITY_MOOD[affinity.mina]})
+- 파티 HP: ${warrior.name} ${warrior.hp}/${warrior.maxHp} | 에이미 ${amy.hp}/${amy.maxHp} | 실루엘라 ${siluella.hp}/${siluella.maxHp}
+- 호감도(0~3): 에이미 ${affinity.amy}(${AFFINITY_MOOD[affinity.amy]}) | 실루엘라 ${affinity.siluella}(${AFFINITY_MOOD[affinity.siluella]})
 
 ## 출력 규칙 (JSON 전용, 다른 텍스트 금지)
 1. 'narration': 상황 묘사와 동료 대사를 자연스럽게 포함한 텍스트.
@@ -197,7 +197,7 @@ export function buildUserMessage(
 
   if (options.affinityTalk) {
     const { target } = options.affinityTalk;
-    const targetName = target === "pina" ? "에이미" : "실루엘라";
+    const targetName = target === "amy" ? "에이미" : "실루엘라";
     const tier = normalizeAffinity(engineResult.newState.party.affinity)[target];
     const capped = tier >= 3;
 
@@ -237,8 +237,8 @@ function buildCurrentStateReminder(state: GameState): string {
 function buildAffinityReminder(state: GameState): string {
   const affinity = normalizeAffinity(state.party.affinity);
   return `\n[현재 관계 상태]
-- 에이미 호감도: ${affinity.pina}/3 (${AFFINITY_MOOD[affinity.pina]})
-- 실루엘라 호감도: ${affinity.mina}/3 (${AFFINITY_MOOD[affinity.mina]})
+- 에이미 호감도: ${affinity.amy}/3 (${AFFINITY_MOOD[affinity.amy]})
+- 실루엘라 호감도: ${affinity.siluella}/3 (${AFFINITY_MOOD[affinity.siluella]})
 - 대사와 반응의 거리감은 현재 호감도를 기준으로 조절하세요. 호감도 수치를 직접 말하지 말고 태도와 말투로만 반영하세요.
 `;
 }
@@ -289,7 +289,7 @@ function describeAction(action: PlayerAction, members: Character[]): string {
     case "alchemy":
       return "연금생성 — 실루엘라";
     case "affinity_talk":
-      return action.target === "pina"
+      return action.target === "amy"
         ? "안전지대 호감도 대화 — 에이미와 대화하고 에이미의 호감도 +1(최대 3)"
         : "안전지대 호감도 대화 — 실루엘라와 대화하고 실루엘라의 호감도 +1(최대 3)";
     case "leave_safe_room":

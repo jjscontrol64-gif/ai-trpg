@@ -539,8 +539,8 @@ function processNpc(state: GameState): EngineResult {
 
 function processPathfinding(state: GameState): EngineResult {
   const s = structuredClone(state);
-  const pina = s.party.members[1];
-  const action = pina.actions.find((a) => a.name === "패스파인딩");
+  const amy = s.party.members[1];
+  const action = amy.actions.find((a) => a.name === "패스파인딩");
   if (!action || action.remaining <= 0) {
     return {
       newState: s,
@@ -568,8 +568,8 @@ function processPathfinding(state: GameState): EngineResult {
 
 function processAlchemy(state: GameState): EngineResult {
   const s = structuredClone(state);
-  const mina = s.party.members[2];
-  const action = mina.actions.find((a) => a.name === "연금생성");
+  const siluella = s.party.members[2];
+  const action = siluella.actions.find((a) => a.name === "연금생성");
   if (!action || action.remaining <= 0) {
     return {
       newState: s,
@@ -579,7 +579,7 @@ function processAlchemy(state: GameState): EngineResult {
   }
   action.remaining--;
 
-  const diceResult = performDiceCheck(mina, "int", false, s.mode, false);
+  const diceResult = performDiceCheck(siluella, "int", false, s.mode, false);
   let item: ConsumableItem;
   let summary = "연금생성! ";
 
@@ -609,14 +609,14 @@ function processAlchemy(state: GameState): EngineResult {
 
 function processAffinityTalk(
   state: GameState,
-  target: "pina" | "mina"
+  target: "amy" | "siluella"
 ): EngineResult {
   const s = structuredClone(state);
   const current = s.party.affinity[target];
   s.party.affinity[target] = Math.min(3, current + 1) as 0 | 1 | 2 | 3;
   s.phase = "exploration";
 
-  const targetName = target === "pina" ? "에이미" : "실루엘라";
+  const targetName = target === "amy" ? "에이미" : "실루엘라";
   const capped = current === 3;
   return {
     newState: s,
@@ -698,19 +698,19 @@ function getPostCombatActions(state: GameState): PlayerAction[] {
 
 function getAvailableExplorationSkills(state: GameState): PlayerAction[] {
   const actions: PlayerAction[] = [];
-  const pina = state.party.members[1];
-  const mina = state.party.members[2];
+  const amy = state.party.members[1];
+  const siluella = state.party.members[2];
 
   if (
-    pina?.hp > 0 &&
-    pina.actions.some((action) => action.name === "패스파인딩" && action.remaining > 0)
+    amy?.hp > 0 &&
+    amy.actions.some((action) => action.name === "패스파인딩" && action.remaining > 0)
   ) {
     actions.push({ type: "pathfinding" });
   }
 
   if (
-    mina?.hp > 0 &&
-    mina.actions.some((action) => action.name === "연금생성" && action.remaining > 0)
+    siluella?.hp > 0 &&
+    siluella.actions.some((action) => action.name === "연금생성" && action.remaining > 0)
   ) {
     actions.push({ type: "alchemy" });
   }
@@ -870,8 +870,8 @@ function buildTrapActions(state: GameState): PlayerAction[] {
 
 function buildSafeRoomActions(): PlayerAction[] {
   return [
-    { type: "affinity_talk", target: "pina" },
-    { type: "affinity_talk", target: "mina" },
+    { type: "affinity_talk", target: "amy" },
+    { type: "affinity_talk", target: "siluella" },
     { type: "leave_safe_room" },
   ];
 }

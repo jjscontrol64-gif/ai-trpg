@@ -105,8 +105,8 @@ export function buildStatusWindow(state: GameState): StatusWindowData {
   const affinity = normalizeAffinity(state.party.affinity);
   return {
     warrior: formatCharacter(state.party.members[0]),
-    pina: formatCharacter(state.party.members[1], affinity.pina),
-    mina: formatCharacter(state.party.members[2], affinity.mina),
+    amy: formatCharacter(state.party.members[1], affinity.amy),
+    siluella: formatCharacter(state.party.members[2], affinity.siluella),
     monster: formatMonster(state),
     party: formatParty(state),
   };

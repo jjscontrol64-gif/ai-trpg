@@ -4,7 +4,7 @@ import { processAction, getAvailableDirections, getTalkBiasedActions } from "@/l
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { buildStatusWindow } from "@/lib/status";
 import { createInitialState } from "@/lib/initial-state";
-import { normalizeGameState } from "@/lib/state-normalization";
+import { normalizeAffinity, normalizeGameState } from "@/lib/state-normalization";
 import {
   AIProviderModelNotFoundError,
   AIProviderQuotaError,
@@ -686,12 +686,12 @@ async function getEndingNarration(
   resolvedAIModel: ResolvedAIModel,
   lastAction?: string
 ): Promise<string> {
-  const affinity = state.party.affinity;
+  const affinity = normalizeAffinity(state.party.affinity);
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
 레드드래곤을 물리친 후, 시점이 TRPG 테이블로 전환됩니다.
 에이미와 실루엘라가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
-동료 호감도는 에이미 ${affinity.pina}단계, 실루엘라 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
+동료 호감도는 에이미 ${affinity.amy}단계, 실루엘라 ${affinity.siluella}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
 고풍스러운 판타지 문체에서 현실의 따뜻한 톤으로 자연스럽게 전환하세요.`
     : `당신은 TRPG 게임 마스터입니다. 패배 엔딩을 연출하세요.
 파티가 전멸했습니다. 시점이 TRPG 테이블로 전환됩니다.
@@ -715,21 +715,21 @@ async function getEndingNarration(
 
 function buildEndingChoices(state: GameState): ChoiceOption[] {
   const choices: ChoiceOption[] = [];
-  const { affinity } = state.party;
+  const affinity = normalizeAffinity(state.party.affinity);
 
-  if (affinity.pina >= 3) {
+  if (affinity.amy >= 3) {
     choices.push({
       label: "🗡️ 에이미 — 약속의 후일담",
       text: "에이미와 오늘 모험 뒤의 약속을 나눈다.",
-      action: { type: "ending_choice", choiceId: "pina_promise" },
+      action: { type: "ending_choice", choiceId: "amy_promise" },
     });
   }
 
-  if (affinity.mina >= 3) {
+  if (affinity.siluella >= 3) {
     choices.push({
       label: "🔮 실루엘라 — 조용한 후일담",
       text: "실루엘라와 세션이 남긴 의미를 차분히 되짚는다.",
-      action: { type: "ending_choice", choiceId: "mina_reflection" },
+      action: { type: "ending_choice", choiceId: "siluella_reflection" },
     });
   }
 
@@ -748,10 +748,11 @@ async function getEndingChoiceNarration(
   resolvedAIModel: ResolvedAIModel,
   lastAction?: string
 ): Promise<string> {
+  const affinity = normalizeAffinity(state.party.affinity);
   const focus = {
-    pina_promise:
+    amy_promise:
       "에이미가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
-    mina_reflection:
+    siluella_reflection:
       "실루엘라가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
     shared_table:
       "에이미와 실루엘라가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
@@ -759,7 +760,7 @@ async function getEndingChoiceNarration(
 
   const systemPrompt = `당신은 TRPG 게임 마스터입니다. 정복 엔딩 이후의 짧은 후일담 에필로그를 작성하세요.
 선택된 후일담: ${focus}.
-동료 호감도는 에이미 ${state.party.affinity.pina}단계, 실루엘라 ${state.party.affinity.mina}단계입니다.
+동료 호감도는 에이미 ${affinity.amy}단계, 실루엘라 ${affinity.siluella}단계입니다.
 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고, 과한 연애 묘사는 피하세요.
 텍스트만 반환하세요. JSON은 반환하지 마세요.`;
 

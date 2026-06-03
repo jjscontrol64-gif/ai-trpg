@@ -6,8 +6,8 @@ import { StatusWindowData } from "@/lib/types";
 // PartyHud.tsx의 SLOTS와 동일한 매핑 (key는 StatusWindowData의 키)
 const SEATS = [
   { key: "warrior", img: "/images/characters/warrior.png", pos: "48% 12%" },
-  { key: "pina", img: "/images/characters/fina.png", pos: "50% 8%" },
-  { key: "mina", img: "/images/characters/mina.png", pos: "46% 14%" },
+  { key: "amy", img: "/images/characters/amy.png", pos: "50% 8%" },
+  { key: "siluella", img: "/images/characters/siluella.png", pos: "46% 14%" },
 ] as const;
 
 const FALLBACK_NAMES = ["레온", "피나", "미나"];

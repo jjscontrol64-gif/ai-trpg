@@ -22,8 +22,8 @@ export type StatType = "str" | "dex" | "int";
 export type AffinityLevel = 0 | 1 | 2 | 3;
 
 export interface Affinity {
-  pina: AffinityLevel;
-  mina: AffinityLevel;
+  amy: AffinityLevel;
+  siluella: AffinityLevel;
 }
 
 export interface EquipItem {
@@ -167,8 +167,8 @@ export interface ChatMessage {
 
 export interface StatusWindowData {
   warrior: CharacterStatusDisplay;
-  pina: CharacterStatusDisplay;
-  mina: CharacterStatusDisplay;
+  amy: CharacterStatusDisplay;
+  siluella: CharacterStatusDisplay;
   monster: MonsterStatusDisplay | null;
   party: PartyStatusDisplay;
 }
