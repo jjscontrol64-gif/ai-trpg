@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import CommandMenu from "@/components/CommandMenu";
+import ConferOverlay from "@/components/ConferOverlay";
 import PartyDrawer from "@/components/PartyDrawer";
 import PartyHud from "@/components/PartyHud";
 import ScriptStage, { AttackFxEvent } from "@/components/ScriptStage";
@@ -712,6 +713,10 @@ export default function HomePage() {
           }
         />
       </div>
+
+      {choiceSubmitStatus === "submitting" ? (
+        <ConferOverlay status={statusWindow} />
+      ) : null}
 
       <PartyDrawer
         open={drawerOpen}
