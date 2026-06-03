@@ -7,7 +7,7 @@ import { EngineResult } from "./types";
 describe("buildUserMessage", () => {
   it("keeps current affinity close to the narration request", () => {
     const state = createInitialState("Tester", "normal");
-    state.party.affinity = { pina: 2, mina: 1 };
+    state.party.affinity = { amy: 2, siluella: 1 };
 
     const engineResult: EngineResult = {
       newState: state,

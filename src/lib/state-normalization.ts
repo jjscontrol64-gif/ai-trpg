@@ -3,8 +3,8 @@ import { createItemInstanceId } from "./item-id";
 import { Affinity, AffinityLevel, ConsumableItem, GameState } from "./types";
 
 export const DEFAULT_AFFINITY: Affinity = {
-  pina: 0,
-  mina: 0,
+  amy: 0,
+  siluella: 0,
 };
 
 function normalizeAffinityLevel(value: unknown): AffinityLevel {
@@ -12,10 +12,15 @@ function normalizeAffinityLevel(value: unknown): AffinityLevel {
 }
 
 export function normalizeAffinity(value: unknown): Affinity {
-  const candidate = value as Partial<Affinity> | undefined;
+  const candidate = value as
+    | (Partial<Affinity> & {
+        pina?: AffinityLevel;
+        mina?: AffinityLevel;
+      })
+    | undefined;
   return {
-    pina: normalizeAffinityLevel(candidate?.pina),
-    mina: normalizeAffinityLevel(candidate?.mina),
+    amy: normalizeAffinityLevel(candidate?.amy ?? candidate?.pina),
+    siluella: normalizeAffinityLevel(candidate?.siluella ?? candidate?.mina),
   };
 }
 

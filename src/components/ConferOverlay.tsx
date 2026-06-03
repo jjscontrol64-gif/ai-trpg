@@ -5,8 +5,8 @@ import type { StatusWindowData } from "@/lib/types";
 
 const SEATS = [
   { key: "warrior", img: "/images/characters/warrior.png", pos: "48% 12%" },
-  { key: "pina", img: "/images/characters/fina.png", pos: "50% 8%" },
-  { key: "mina", img: "/images/characters/mina.png", pos: "46% 14%" },
+  { key: "amy", img: "/images/characters/amy.png", pos: "50% 8%" },
+  { key: "siluella", img: "/images/characters/siluella.png", pos: "46% 14%" },
 ] as const;
 
 const FALLBACK_NAMES = ["레온", "에이미", "실루엘라"];

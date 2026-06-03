@@ -6,8 +6,8 @@ import { ChoiceOption, GameState, StatusWindowData } from "@/lib/types";
 
 const SLOTS = [
   { key: "warrior", icon: "⚔️", role: "전사", color: "var(--accent-gold)" },
-  { key: "pina", icon: "🗡️", role: "도적", color: "var(--accent-ember)" },
-  { key: "mina", icon: "🔮", role: "마법사", color: "var(--accent-blue)" },
+  { key: "amy", icon: "🗡️", role: "도적", color: "var(--accent-ember)" },
+  { key: "siluella", icon: "🔮", role: "마법사", color: "var(--accent-blue)" },
 ] as const;
 
 const EQUIP_LABELS = ["⛑️ 머리", "🧥 몸통", "🗡️ 무기"] as const;

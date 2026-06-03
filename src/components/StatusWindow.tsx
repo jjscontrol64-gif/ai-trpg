@@ -108,8 +108,8 @@ function CharacterCard({
 
 export default function StatusWindow({
   warrior,
-  pina,
-  mina,
+  amy,
+  siluella,
   monster,
   party,
 }: StatusWindowData) {
@@ -129,8 +129,8 @@ export default function StatusWindow({
 
       <div className="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-1 2xl:grid-cols-1">
         <CharacterCard label="⚔️ 전사" data={warrior} color="var(--accent-gold)" />
-        <CharacterCard label="🗡️ 에이미" data={pina} color="var(--accent-ember)" />
-        <CharacterCard label="🔮 실루엘라" data={mina} color="var(--accent-blue)" />
+        <CharacterCard label="🗡️ 에이미" data={amy} color="var(--accent-ember)" />
+        <CharacterCard label="🔮 실루엘라" data={siluella} color="var(--accent-blue)" />
       </div>
 
       {monster && (

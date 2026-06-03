@@ -17,10 +17,10 @@ export interface AttackFxEvent {
 const ATTACK_SFX: Record<string, string> = {
   slash: "/sfx/argon-slash.wav",
   smash: "/sfx/argon-heavy-hit.wav",
-  stab: "/sfx/fina-stab.wav",
-  ambush: "/sfx/fina-backstab.wav",
-  magic: "/sfx/mina-arcane-bolt.wav",
-  bind: "/sfx/mina-arcane-bind.wav",
+  stab: "/sfx/amy-stab.wav",
+  ambush: "/sfx/amy-backstab.wav",
+  magic: "/sfx/siluella-arcane-bolt.wav",
+  bind: "/sfx/siluella-arcane-bind.wav",
 };
 
 export default function ScriptStage({
