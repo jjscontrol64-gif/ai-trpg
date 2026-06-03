@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createInitialState } from "./initial-state";
-import { buildUserMessage } from "./prompt";
+import { buildSystemPrompt, buildUserMessage } from "./prompt";
 import { EngineResult } from "./types";
 
 describe("buildUserMessage", () => {
@@ -62,5 +62,17 @@ describe("buildUserMessage", () => {
     expect(message).toContain("전투 종료");
     expect(message).toContain("승리");
     expect(message).toContain("엔딩");
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  it("defines coordinate direction rules for pathfinding narration", () => {
+    const state = createInitialState("Tester", "normal");
+
+    const prompt = buildSystemPrompt(state);
+
+    expect(prompt).toContain("Coordinate direction rules");
+    expect(prompt).toContain("Row numbers increase southward");
+    expect(prompt).toContain("from F3 to G7 is east and south, never north");
   });
 });

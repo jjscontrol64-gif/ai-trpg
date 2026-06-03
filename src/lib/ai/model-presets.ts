@@ -1,12 +1,12 @@
 import type { AIModelPreset } from "./types";
 
 export const AI_MODEL_PRESETS: AIModelPreset[] = [
-  // {
-  //   id: "gemini-2.5-flash",
-  //   provider: "gemini",
-  //   label: "Gemini 2.5 Flash",
-  //   model: "gemini-2.5-flash",
-  // },
+  {
+    id: "gemini-2.5-flash",
+    provider: "gemini",
+    label: "Gemini 2.5 Flash",
+    model: "gemini-2.5-flash",
+  },
   {
     id: "gemini-2.5-pro",
     provider: "gemini",
@@ -31,12 +31,12 @@ export const AI_MODEL_PRESETS: AIModelPreset[] = [
     label: "Claude Opus 4.8",
     model: "claude-opus-4-8",
   },
-  // {
-  //   id: "gpt-4o",
-  //   provider: "openai",
-  //   label: "GPT-4o",
-  //   model: "gpt-4o",
-  // },
+  {
+    id: "gpt-4o",
+    provider: "openai",
+    label: "GPT-4o",
+    model: "gpt-4o",
+  },
   {
     id: "gpt-5.5",
     provider: "openai",

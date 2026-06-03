@@ -45,6 +45,15 @@ type UserMessageOptions = {
   affinityTalk?: { target: keyof Affinity };
 };
 
+const COORDINATE_DIRECTION_RULES = `Coordinate direction rules:
+- Coordinates use column+row format, such as F3 or G7.
+- Column letters increase eastward: F3 -> G3 is east.
+- Column letters decrease westward: F3 -> E3 is west.
+- Row numbers decrease northward: F3 -> F2 is north.
+- Row numbers increase southward: F3 -> F4 is south.
+- Before saying north/south/east/west, compare the current coordinate and target coordinate by column and row.
+- Example: from F3 to G7 is east and south, never north.`;
+
 export function buildSystemPrompt(state: GameState): string {
   const { party } = state;
   const [warrior, pina, mina] = party.members;
@@ -146,6 +155,8 @@ export function buildSystemPrompt(state: GameState): string {
     { "actionIndex": 3, "label": "✨ 추가 선택지 — 키워드", "text": "묘사" }
   ]
 }
+
+${COORDINATE_DIRECTION_RULES}
 
 Choice count policy: Return ${DEFAULT_CHOICE_COUNT} choices by default. Use up to ${MAX_CHOICE_COUNT} only when the scene genuinely needs more tactical, social, or exploration branches.`;
 }
