@@ -41,6 +41,7 @@ type ResolvedAIModel = {
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
 const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
 const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
+const AI_PROMPT_HISTORY_LIMIT = 3;
 const apiKeySessions = new Map<string, ApiKeySession>();
 
 class UnknownAIModelPresetError extends Error {}
@@ -402,7 +403,7 @@ async function handleTalk(
   };
 
   const systemPrompt = buildSystemPrompt(normalizedState);
-  const history = normalizedState.messageHistory.slice(-10);
+  const history = normalizedState.messageHistory.slice(-AI_PROMPT_HISTORY_LIMIT);
   const messages = [
     ...history.map((m) => ({
       role: m.role as "user" | "assistant",
@@ -487,7 +488,7 @@ async function handlePlayerAction(
 
   const systemPrompt = buildSystemPrompt(newState);
 
-  const history = newState.messageHistory.slice(-10);
+  const history = newState.messageHistory.slice(-AI_PROMPT_HISTORY_LIMIT);
   const messages = [
     ...history.map((m) => ({
       role: m.role as "user" | "assistant",
