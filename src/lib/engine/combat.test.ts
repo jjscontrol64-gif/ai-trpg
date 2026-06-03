@@ -118,7 +118,7 @@ describe("combat damage scaling", () => {
     expect(result.state.combat.monster?.hp).toBe(19);
   });
 
-  it("applies the same damage formula to ambush", () => {
+  it("promotes successful ambush rolls to critical successes", () => {
     mockRoll(6);
     const rogue = createCharacter("Rogue", "rogue", { str: 1, dex: 4, int: 1 }, "암습");
     const state = createState(rogue);
@@ -129,10 +129,10 @@ describe("combat damage scaling", () => {
       raw: 6,
       stat: 6,
       total: 12,
-      judgment: "success",
+      judgment: "critical_success",
     });
-    expect(result.playerDamage).toBe(7);
+    expect(result.playerDamage).toBe(11);
     expect(result.monsterDamage).toBe(0);
-    expect(result.state.combat.monster?.hp).toBe(23);
+    expect(result.state.combat.monster?.hp).toBe(19);
   });
 });

@@ -1,0 +1,99 @@
+/* ============================================================
+   heal-fx.css — 회복/버프(상태 변화) 이펙트 스타일
+   ------------------------------------------------------------
+   attack-fx.css 와 동일한 패턴. heal-fx.js 와 함께 사용.
+   대상이 되는 칩(.chip)에 position:relative 가 필요하며,
+   엔진이 내부에 .heal-fx-layer 를 자동 생성한다.
+   색은 --heal-core / --heal-soft / --heal-text 변수로 주입.
+   ============================================================ */
+
+/* FX가 칩 밖(위쪽)으로 살짝 넘쳐도 보이도록 */
+.heal-fx-host { position: relative; }
+.heal-fx-layer {
+  position: absolute; inset: 0;
+  pointer-events: none; overflow: visible;
+  z-index: 6;
+}
+
+/* ── 빛 입자 (시그니처) ───────────────────────────── */
+.heal-particle {
+  position: absolute; left: 0; top: 0;
+  will-change: transform, opacity;
+  font-size: .72rem; line-height: 1;
+  color: var(--heal-core, #9fe59a);
+  filter: drop-shadow(0 0 4px var(--heal-soft, #5cbf7d));
+}
+.heal-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--heal-core, #9fe59a);
+  box-shadow: 0 0 6px 1px var(--heal-soft, #5cbf7d);
+}
+
+/* ── 떠오르는 +숫자 ──────────────────────────────── */
+.heal-float {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 700; font-size: .82rem; letter-spacing: .01em;
+  white-space: nowrap; color: var(--heal-text, #9fe59a);
+  text-shadow: 0 1px 7px rgba(0, 0, 0, .55), 0 0 10px var(--heal-soft, #5cbf7d);
+  will-change: transform, opacity;
+}
+
+/* ── 칩 내부 글로우(오라) ────────────────────────── */
+.heal-aura {
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+}
+.heal-aura.go { animation: healAura .62s cubic-bezier(.4, 0, .2, 1) forwards; }
+@keyframes healAura {
+  0%   { opacity: 0; box-shadow: inset 0 0 0 0 transparent; }
+  30%  { opacity: 1; box-shadow: inset 0 0 16px 1px var(--heal-soft, #5cbf7d); }
+  100% { opacity: 0; box-shadow: inset 0 0 0 0 transparent; }
+}
+
+/* ── 칩 살짝 들썩 ────────────────────────────────── */
+.heal-lift { animation: healLift .6s cubic-bezier(.34, 1.4, .5, 1); }
+@keyframes healLift {
+  0%   { transform: translateY(0) scale(1); }
+  35%  { transform: translateY(-2px) scale(1.018); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* ── HP/액션 바 충전 광택 ────────────────────────── */
+.hp-bar-fill.heal-surge { animation: healSurge .6s ease-out; }
+@keyframes healSurge {
+  0%   { filter: brightness(1) saturate(1); }
+  30%  { filter: brightness(1.5) saturate(1.15); }
+  100% { filter: brightness(1) saturate(1); }
+}
+/* 바 위를 한 번 훑는 광택 */
+.heal-bar-sheen {
+  position: absolute; inset: 0;
+  border-radius: inherit; overflow: hidden;
+  pointer-events: none; opacity: 0;
+}
+.heal-bar-sheen::after {
+  content: ""; position: absolute; top: 0; bottom: 0;
+  width: 38%; left: -42%;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in oklch, var(--heal-core, #9fe59a) 85%, white) , transparent);
+  filter: blur(1px);
+}
+.heal-bar-sheen.go { opacity: 1; animation: healSheen .58s ease-out forwards; }
+@keyframes healSheen {
+  0%   { opacity: .9; }
+  100% { transform: translateX(360%); opacity: 0; }
+}
+.heal-bar-sheen.go::after { animation: healSheenInner .58s ease-out forwards; }
+@keyframes healSheenInner {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(360%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heal-particle, .heal-float, .heal-aura, .heal-lift,
+  .hp-bar-fill.heal-surge, .heal-bar-sheen { animation: none !important; }
+  .heal-particle, .heal-float, .heal-bar-sheen { display: none !important; }
+}

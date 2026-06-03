@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import CommandMenu from "@/components/CommandMenu";
+import ConferOverlay from "@/components/ConferOverlay";
 import PartyDrawer from "@/components/PartyDrawer";
 import PartyHud from "@/components/PartyHud";
 import ScriptStage, { AttackFxEvent } from "@/components/ScriptStage";
@@ -12,6 +13,7 @@ import {
   DiceRollResult,
   GameResponse,
   GameState,
+  HealFxEvent,
   PlayerAction,
   StatusWindowData,
   StoryBeat,
@@ -25,12 +27,21 @@ import {
   SaveSnapshot,
 } from "@/lib/storage";
 import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
+import { useItem } from "@/lib/use-item";
 
 const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
 const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 type SaveImportStatus = "idle" | "imported" | "error";
+type GameSessionStatus =
+  | { authenticated: false }
+  | {
+      authenticated: true;
+      modelPresetId: string;
+      provider: string;
+      model: string;
+    };
 
 const ATTACK_FX_COLORS: Record<string, string> = {
   slash: "#ffe9bd",
@@ -91,6 +102,7 @@ function applyInspirationToChoice(
 async function postGame<T>(payload: unknown): Promise<T> {
   const response = await fetch("/api/game", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
     },
@@ -113,8 +125,90 @@ async function postGame<T>(payload: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function getGameSessionStatus(): Promise<GameSessionStatus> {
+  const response = await fetch("/api/game", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    return { authenticated: false };
+  }
+
+  return response.json() as Promise<GameSessionStatus>;
+}
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildItemUseLog(choice: ChoiceOption, state: GameState): string {
+  if (choice.action.type !== "use_item") return choice.label;
+  const action = choice.action;
+
+  const item =
+    action.inventoryIndex === undefined
+      ? state.party.inventory.find((entry) => entry.id === action.itemId)
+      : state.party.inventory[action.inventoryIndex];
+  const target =
+    action.targetIndex === undefined
+      ? null
+      : state.party.members[action.targetIndex];
+  const itemName = item?.name ?? choice.label;
+
+  return target ? `${itemName} '${target.name}'에게 사용` : `${itemName} 사용`;
+}
+
+function didUseItemChangeState(previous: GameState, next: GameState): boolean {
+  if (previous.party.inventory.length !== next.party.inventory.length) return true;
+
+  return previous.party.members.some((member, memberIndex) => {
+    const nextMember = next.party.members[memberIndex];
+    if (!nextMember || member.hp !== nextMember.hp) return true;
+
+    return member.actions.some((action, actionIndex) => {
+      return action.remaining !== nextMember.actions[actionIndex]?.remaining;
+    });
+  });
+}
+
+function createHealFxEvent(
+  previous: GameState,
+  next: GameState,
+  isAllHeal: boolean
+): HealFxEvent | null {
+  const targets: HealFxEvent["targets"] = [];
+
+  previous.party.members.forEach((member, memberIndex) => {
+    const nextMember = next.party.members[memberIndex];
+    if (!nextMember) return;
+
+    const hpGain = nextMember.hp - member.hp;
+    if (hpGain > 0) {
+      targets.push({
+        index: memberIndex,
+        kind: isAllHeal ? "allheal" : "heal",
+        amount: hpGain,
+      });
+      return;
+    }
+
+    const actionGain = nextMember.actions.reduce((sum, action, actionIndex) => {
+      const previousRemaining =
+        member.actions[actionIndex]?.remaining ?? action.remaining;
+      return sum + Math.max(0, action.remaining - previousRemaining);
+    }, 0);
+
+    if (actionGain > 0) {
+      targets.push({
+        index: memberIndex,
+        kind: "action",
+        amount: actionGain,
+      });
+    }
+  });
+
+  return targets.length ? { id: createId(), targets } : null;
 }
 
 function createSaveFileName(playerName: string): string {
@@ -126,6 +220,25 @@ function createSaveFileName(playerName: string): string {
   const date = new Date().toISOString().slice(0, 10);
 
   return `ai-trpg-${safePlayerName || "save"}-${date}.json`;
+}
+
+function buildSaveSnapshot(
+  playerName: string,
+  modelPresetId: string,
+  gameState: GameState,
+  beats: StoryBeat[],
+  currentChoices: ChoiceOption[]
+): SaveSnapshot {
+  return {
+    schemaVersion: SAVE_SCHEMA_VERSION,
+    saveId: DEFAULT_SAVE_ID,
+    playerName,
+    modelPresetId,
+    gameState,
+    beats,
+    currentChoices,
+    savedAt: new Date().toISOString(),
+  };
 }
 
 function getPhaseLabel(phase?: GameState["phase"]) {
@@ -214,24 +327,46 @@ export default function HomePage() {
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [previousSnapshot, setPreviousSnapshot] = useState<GameSnapshot | null>(null);
   const [playerName, setPlayerName] = useState("");
-  const [aiApiKey, setAiApiKey] = useState("");
   const [modelPresetId, setModelPresetId] = useState(DEFAULT_MODEL_PRESET_ID);
-  const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const [importStatus, setImportStatus] = useState<SaveImportStatus>("idle");
   const [inspirationArmed, setInspirationArmed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [attackFxEvent, setAttackFxEvent] = useState<AttackFxEvent | null>(null);
+  const [healFxEvent, setHealFxEvent] = useState<HealFxEvent | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    storageProvider.load(DEFAULT_SAVE_ID).then((snapshot) => {
-      if (!cancelled) {
-        setSavedSnapshot(snapshot);
+    storageProvider.load(DEFAULT_SAVE_ID).then(async (snapshot) => {
+      if (cancelled) return;
+
+      setSavedSnapshot(snapshot);
+      if (!snapshot) return;
+
+      const sessionStatus = await getGameSessionStatus();
+      if (cancelled || !sessionStatus.authenticated) {
+        return;
       }
+
+      const restoredModelPresetId =
+        snapshot.modelPresetId || sessionStatus.modelPresetId || DEFAULT_MODEL_PRESET_ID;
+      const normalizedGameState = normalizeGameState(snapshot.gameState);
+
+      setPlayerName(snapshot.playerName);
+      setModelPresetId(restoredModelPresetId);
+      setGameState(normalizedGameState);
+      setStatusWindow(buildStatusWindow(normalizedGameState));
+      setCurrentChoices(snapshot.currentChoices);
+      setBeats(snapshot.beats);
+      setChoiceSubmitStatus("idle");
+      setLastSubmittedChoice(null);
+      setPreviousSnapshot(null);
+      setInspirationArmed(false);
+      setAttackFxEvent(null);
+      setHealFxEvent(null);
     });
 
     return () => {
@@ -284,9 +419,7 @@ export default function HomePage() {
         });
 
         setPlayerName(name);
-        setAiApiKey("");
         setModelPresetId(selectedModelPresetId);
-        setApiKeySessionId(response.apiKeySessionId ?? "");
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
@@ -295,6 +428,7 @@ export default function HomePage() {
         setPreviousSnapshot(null);
         setInspirationArmed(false);
         setAttackFxEvent(null);
+        setHealFxEvent(null);
         setBeats([
           {
             id: createId(),
@@ -313,21 +447,32 @@ export default function HomePage() {
   const handleResume = (apiKey: string, selectedModelPresetId: string) => {
     if (!savedSnapshot) return;
 
-    setError(null);
-    setChoiceSubmitStatus("idle");
-    setLastSubmittedChoice(null);
-    setPreviousSnapshot(null);
-    setPlayerName(savedSnapshot.playerName);
-    setAiApiKey(apiKey);
-    setModelPresetId(selectedModelPresetId);
-    setApiKeySessionId("");
-    const normalizedGameState = normalizeGameState(savedSnapshot.gameState);
-    setGameState(normalizedGameState);
-    setStatusWindow(buildStatusWindow(normalizedGameState));
-    setCurrentChoices(savedSnapshot.currentChoices);
-    setBeats(savedSnapshot.beats);
-    setInspirationArmed(false);
-    setAttackFxEvent(null);
+    startTransition(async () => {
+      try {
+        setError(null);
+        await postGame<{ ok: boolean }>({
+          type: "configure_api_key",
+          modelPresetId: selectedModelPresetId,
+          apiKey,
+        });
+
+        setChoiceSubmitStatus("idle");
+        setLastSubmittedChoice(null);
+        setPreviousSnapshot(null);
+        setPlayerName(savedSnapshot.playerName);
+        setModelPresetId(selectedModelPresetId);
+        const normalizedGameState = normalizeGameState(savedSnapshot.gameState);
+        setGameState(normalizedGameState);
+        setStatusWindow(buildStatusWindow(normalizedGameState));
+        setCurrentChoices(savedSnapshot.currentChoices);
+        setBeats(savedSnapshot.beats);
+        setInspirationArmed(false);
+        setAttackFxEvent(null);
+        setHealFxEvent(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "API key setup failed.");
+      }
+    });
   };
 
   const handleSave = () => {
@@ -337,13 +482,13 @@ export default function HomePage() {
       try {
         setSaveStatus("idle");
         const snapshot: SaveSnapshot = {
-          schemaVersion: SAVE_SCHEMA_VERSION,
-          saveId: DEFAULT_SAVE_ID,
-          playerName,
-          gameState,
-          beats,
-          currentChoices,
-          savedAt: new Date().toISOString(),
+          ...buildSaveSnapshot(
+            playerName,
+            modelPresetId,
+            gameState,
+            beats,
+            currentChoices
+          ),
         };
 
         await storageProvider.save(snapshot);
@@ -360,13 +505,13 @@ export default function HomePage() {
     if (!gameState || !playerName) return;
 
     const snapshot: SaveSnapshot = {
-      schemaVersion: SAVE_SCHEMA_VERSION,
-      saveId: DEFAULT_SAVE_ID,
-      playerName,
-      gameState,
-      beats,
-      currentChoices,
-      savedAt: new Date().toISOString(),
+      ...buildSaveSnapshot(
+        playerName,
+        modelPresetId,
+        gameState,
+        beats,
+        currentChoices
+      ),
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
       type: "application/json",
@@ -412,6 +557,10 @@ export default function HomePage() {
     updateHistory = true
   ) => {
     if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
+    if (choice.action.type === "use_item") {
+      handleUseItemLocally(choice);
+      return;
+    }
 
     const submittedChoice = applyInspirationToChoice(
       choice,
@@ -450,9 +599,7 @@ export default function HomePage() {
           gameState,
           action: submittedChoice.action,
           choiceText: submittedChoice.text,
-          apiKeySessionId,
           modelPresetId,
-          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
         const nextAttackFxEvent = createAttackFxEvent(
           submittedChoice.action,
@@ -460,14 +607,13 @@ export default function HomePage() {
           response
         );
 
-        setAiApiKey("");
-        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
         setLastSubmittedChoice(null);
         setAttackFxEvent(nextAttackFxEvent);
+        setHealFxEvent(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -483,6 +629,84 @@ export default function HomePage() {
         setError(caught instanceof Error ? caught.message : "행동 처리에 실패했습니다.");
       }
     });
+  };
+
+  const handleUseItemLocally = (choice: ChoiceOption) => {
+    if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
+
+    if (choice.action.type !== "use_item") {
+      handleChoice(choice);
+      return;
+    }
+    const action = choice.action;
+
+    setPreviousSnapshot(
+      createGameSnapshot({
+        gameState,
+        statusWindow,
+        beats,
+        currentChoices,
+      })
+    );
+    setError(null);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
+    setInspirationArmed(false);
+
+    const normalizedGameState = normalizeGameState(gameState);
+    const usedItemByIndex =
+      action.inventoryIndex === undefined
+        ? undefined
+        : normalizedGameState.party.inventory[action.inventoryIndex];
+    const usedItem =
+      usedItemByIndex?.id === action.itemId
+        ? usedItemByIndex
+        : normalizedGameState.party.inventory.find(
+            (item) => item.id === action.itemId
+          );
+    const isAllHeal = Boolean(
+      usedItem?.allHpRestore || usedItem?.effectId === "restore_all_hp"
+    );
+    const result = useItem(
+      normalizedGameState,
+      {
+        itemId: action.itemId,
+        targetIndex: action.targetIndex,
+        inventoryIndex: action.inventoryIndex,
+      },
+      {
+        getNextActions: () => currentChoices.map((currentChoice) => currentChoice.action),
+      }
+    );
+    const itemUseLog = buildItemUseLog(choice, normalizedGameState);
+    const changed = didUseItemChangeState(normalizedGameState, result.newState);
+
+    if (!changed) {
+      setError(result.eventSummary);
+      setHealFxEvent(null);
+      setBeats((prev) => [
+        ...prev,
+        {
+          id: createId(),
+          role: "user",
+          text: `${itemUseLog} 실패: ${result.eventSummary}`,
+        },
+      ]);
+      return;
+    }
+
+    setGameState(result.newState);
+    setStatusWindow(buildStatusWindow(result.newState));
+    setAttackFxEvent(null);
+    setHealFxEvent(createHealFxEvent(normalizedGameState, result.newState, isAllHeal));
+    setBeats((prev) => [
+      ...prev,
+      {
+        id: createId(),
+        role: "user",
+        text: itemUseLog,
+      },
+    ]);
   };
 
   const handleRetryChoice = () => {
@@ -502,18 +726,15 @@ export default function HomePage() {
         const response = await postGame<GameResponse>({
           type: "talk",
           gameState,
-          apiKeySessionId,
           modelPresetId,
-          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
 
-        setAiApiKey("");
-        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
         setAttackFxEvent(null);
+        setHealFxEvent(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -544,7 +765,25 @@ export default function HomePage() {
     setPreviousSnapshot(null);
     setInspirationArmed(false);
     setAttackFxEvent(null);
+    setHealFxEvent(null);
     setError(null);
+  };
+
+  const handleHome = () => {
+    setGameState(null);
+    setStatusWindow(null);
+    setBeats([]);
+    setCurrentChoices([]);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
+    setPreviousSnapshot(null);
+    setInspirationArmed(false);
+    setDrawerOpen(false);
+    setAttackFxEvent(null);
+    setHealFxEvent(null);
+    setError(null);
+    setSaveStatus("idle");
+    setImportStatus("idle");
   };
 
   if (!gameState || !statusWindow) {
@@ -567,6 +806,13 @@ export default function HomePage() {
       <header className="topbar panel-shell">
         <h1 className="game-title">{playerName}의 던전 탐험</h1>
         <div className="topbar-actions">
+          <button
+            className="pill"
+            onClick={handleHome}
+            disabled={choiceSubmitStatus === "submitting"}
+          >
+            Home
+          </button>
           <span className="pill">{getModeLabel(gameState.mode)}</span>
           <span className="pill">{getPhaseLabel(gameState.phase)}</span>
           <button className="pill" onClick={handleSave} disabled={isPending}>
@@ -589,9 +835,20 @@ export default function HomePage() {
         </div>
       </header>
 
-      {error ? <div className="play-error">{error}</div> : null}
+      {error ? (
+        <div className="play-error">
+          <span>{error}</span>
+          <button className="pill" type="button" onClick={handleHome}>
+            Home
+          </button>
+        </div>
+      ) : null}
 
-      <PartyHud status={statusWindow} onOpenDrawer={() => setDrawerOpen(true)} />
+      <PartyHud
+        status={statusWindow}
+        healFxEvent={healFxEvent}
+        onOpenDrawer={() => setDrawerOpen(true)}
+      />
 
       <div className="stage">
         <ScriptStage
@@ -622,13 +879,17 @@ export default function HomePage() {
         />
       </div>
 
+      {choiceSubmitStatus === "submitting" ? (
+        <ConferOverlay status={statusWindow} />
+      ) : null}
+
       <PartyDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         status={statusWindow}
         inventory={gameState.party.inventory}
         members={gameState.party.members}
-        onUse={handleChoice}
+        onUse={handleUseItemLocally}
         inventoryDisabled={
           choiceSubmitStatus === "submitting" ||
           gameState.phase === "victory" ||

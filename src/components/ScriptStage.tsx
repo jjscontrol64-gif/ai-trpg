@@ -14,6 +14,15 @@ export interface AttackFxEvent {
   turns?: number;
 }
 
+const ATTACK_SFX: Record<string, string> = {
+  slash: "/sfx/argon-slash.wav",
+  smash: "/sfx/argon-heavy-hit.wav",
+  stab: "/sfx/fina-stab.wav",
+  ambush: "/sfx/fina-backstab.wav",
+  magic: "/sfx/mina-arcane-bolt.wav",
+  bind: "/sfx/mina-arcane-bind.wav",
+};
+
 export default function ScriptStage({
   beats,
   monster,
@@ -31,6 +40,8 @@ export default function ScriptStage({
   const arenaRef = useRef<HTMLDivElement | null>(null);
   const targetRef = useRef<HTMLDivElement | null>(null);
   const fxLayerRef = useRef<HTMLDivElement | null>(null);
+  const sfxRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const lastSfxEventIdRef = useRef<string | null>(null);
   const fxInstanceRef = useRef<{
     play: (name: string, opts?: Record<string, unknown>) => void;
     ctx: { bound: (on: boolean) => void };
@@ -107,6 +118,42 @@ export default function ScriptStage({
   }, [displayMonster, fxScriptReady]);
 
   useEffect(() => {
+    const sfx = new Map<string, HTMLAudioElement>();
+
+    Object.entries(ATTACK_SFX).forEach(([effect, src]) => {
+      const audio = new Audio(src);
+      audio.preload = "auto";
+      audio.volume = 0.58;
+      sfx.set(effect, audio);
+    });
+
+    sfxRef.current = sfx;
+
+    return () => {
+      sfx.forEach((audio) => {
+        audio.pause();
+        audio.src = "";
+      });
+      sfx.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!attackFxEvent || lastSfxEventIdRef.current === attackFxEvent.id) return;
+
+    lastSfxEventIdRef.current = attackFxEvent.id;
+    const audio = sfxRef.current.get(attackFxEvent.effect);
+    if (!audio) return;
+
+    audio.currentTime = 0;
+    audio
+      .play()
+      .catch(() => {
+        // Browser audio policy can reject playback before the first trusted gesture.
+      });
+  }, [attackFxEvent]);
+
+  useEffect(() => {
     if (!attackFxEvent || !fxInstanceRef.current) return;
 
     fxInstanceRef.current.play(attackFxEvent.effect, {
@@ -141,14 +188,23 @@ export default function ScriptStage({
       <div ref={logRef} className="narr-scroll">
         {displayMonster ? (
           <div
-            ref={arenaRef}
-            className={`boss sticky-host fx-arena ${
+            className={`boss sticky-host ${
               displayMonster.statusEffect ? "fx-bound-arena" : ""
             } ${
               defeatingMonster ? "boss-defeated" : ""
             }`}
           >
-            <div className="boss-r">
+            <div ref={arenaRef} className="boss-stage fx-arena">
+              <div ref={targetRef} className="fx-target boss-fx-target">
+                <span className="glyph" aria-hidden="true">
+                  💀
+                </span>
+              </div>
+              <div ref={fxLayerRef} className="fx-layer boss-fx-layer" />
+            </div>
+
+            <div className="boss-meta">
+              <div className="boss-r">
               <span className="boss-nm">
                 {displayMonster.level} {displayMonster.name}
               </span>
@@ -156,18 +212,13 @@ export default function ScriptStage({
                 HP {displayMonster.hp} / {displayMonster.maxHp}
               </span>
             </div>
-            <span className="hp-bar boss-bar">
-              <span className="hp-bar-fill hp-low" style={{ width: `${mPct}%` }} />
-            </span>
+              <span className="hp-bar boss-bar">
+                <span className="hp-bar-fill hp-low" style={{ width: `${mPct}%` }} />
+              </span>
+            </div>
             {displayMonster.statusEffect ? (
               <span className="boss-eff">🔗 {displayMonster.statusEffect}</span>
             ) : null}
-            <div ref={targetRef} className="fx-target boss-fx-target">
-              <span className="glyph" aria-hidden="true">
-                💀
-              </span>
-            </div>
-            <div ref={fxLayerRef} className="fx-layer boss-fx-layer" />
           </div>
         ) : null}
 

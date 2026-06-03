@@ -16,11 +16,13 @@ type InventoryPanelProps = {
 
 type ItemStack = {
   item: ConsumableItem;
+  inventoryIndex: number;
   count: number;
 };
 
 function buildUseItemChoice(
   item: ConsumableItem,
+  inventoryIndex: number,
   members: GameState["party"]["members"]
 ): ChoiceOption {
   const targetIndex = getBagItemTargetIndex(item, members);
@@ -33,6 +35,7 @@ function buildUseItemChoice(
     action: {
       type: "use_item",
       itemId: item.id,
+      inventoryIndex,
       ...(targetIndex === undefined ? {} : { targetIndex }),
     },
   };
@@ -44,14 +47,14 @@ function getUsableStacks(
 ): ItemStack[] {
   const stacks = new Map<string, ItemStack>();
 
-  for (const item of inventory) {
+  for (const [inventoryIndex, item] of inventory.entries()) {
     if (!canUseBagItem(item, members)) continue;
 
     const existing = stacks.get(item.name);
     if (existing) {
       existing.count += 1;
     } else {
-      stacks.set(item.name, { item, count: 1 });
+      stacks.set(item.name, { item, inventoryIndex, count: 1 });
     }
   }
 
@@ -75,11 +78,11 @@ export default function InventoryPanel({
 
       {stacks.length > 0 ? (
         <div className="mt-5 grid gap-2">
-          {stacks.map(({ item, count }) => (
+          {stacks.map(({ item, inventoryIndex, count }) => (
             <button
               key={item.name}
               type="button"
-              onClick={() => onUse(buildUseItemChoice(item, members))}
+              onClick={() => onUse(buildUseItemChoice(item, inventoryIndex, members))}
               disabled={disabled}
               className="flex min-h-14 items-center justify-between gap-3 rounded-[1.1rem] border border-white/8 bg-black/10 px-4 py-3 text-left text-sm transition hover:-translate-y-px hover:border-[color:rgba(218,183,107,0.35)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
             >

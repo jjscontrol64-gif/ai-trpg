@@ -39,21 +39,52 @@ type ResolvedAIModel = {
 };
 
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
+const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
+const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
 const apiKeySessions = new Map<string, ApiKeySession>();
 
 class UnknownAIModelPresetError extends Error {}
+
+export function GET(req: NextRequest) {
+  pruneExpiredApiKeySessions();
+
+  const session = getApiKeySession(req);
+  if (!session) {
+    const response = NextResponse.json({ authenticated: false });
+    deleteApiKeySessionCookies(response);
+    return response;
+  }
+
+  session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+
+  return withApiKeySessionCookie(
+    NextResponse.json({
+      authenticated: true,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    }),
+    req,
+    {
+      apiKey: session.data.apiKey,
+      apiKeySessionId: session.id,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    }
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { type } = body;
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-    const apiKeySessionId =
-      typeof body.apiKeySessionId === "string" ? body.apiKeySessionId : "";
     const modelPresetId =
       typeof body.modelPresetId === "string" ? body.modelPresetId : "";
 
     if (
+      type !== "configure_api_key" &&
       type !== "start_game" &&
       type !== "player_action" &&
       type !== "talk"
@@ -61,27 +92,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
     }
 
-    const resolvedAIModel = resolveAIModel(apiKey, apiKeySessionId, modelPresetId);
+    const resolvedAIModel = resolveAIModel(req, apiKey, modelPresetId);
+
+    if (type === "configure_api_key") {
+      return withApiKeySessionCookie(
+        NextResponse.json({ ok: true }),
+        req,
+        resolvedAIModel
+      );
+    }
 
     if (type === "start_game") {
-      return await handleStartGame(
-        body.playerName,
-        parseDifficulty(body.difficulty),
+      return withApiKeySessionCookie(
+        await handleStartGame(
+          body.playerName,
+          parseDifficulty(body.difficulty),
+          resolvedAIModel
+        ),
+        req,
         resolvedAIModel
       );
     }
 
     if (type === "player_action") {
-      return await handlePlayerAction(
-        body.gameState,
-        body.action,
-        body.choiceText,
+      return withApiKeySessionCookie(
+        await handlePlayerAction(
+          body.gameState,
+          body.action,
+          body.choiceText,
+          resolvedAIModel
+        ),
+        req,
         resolvedAIModel
       );
     }
 
     if (type === "talk") {
-      return await handleTalk(body.gameState, resolvedAIModel);
+      return withApiKeySessionCookie(
+        await handleTalk(body.gameState, resolvedAIModel),
+        req,
+        resolvedAIModel
+      );
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
@@ -140,32 +191,16 @@ export async function POST(req: NextRequest) {
 }
 
 function resolveAIModel(
+  req: NextRequest,
   apiKey: string,
-  apiKeySessionId: string,
   modelPresetId: string
 ): ResolvedAIModel {
-  if (apiKeySessionId) {
-    const session = apiKeySessions.get(apiKeySessionId);
-    if (session && session.expiresAt > Date.now()) {
-      session.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
-      return {
-        apiKey: session.apiKey,
-        apiKeySessionId,
-        modelPresetId: session.modelPresetId,
-        provider: session.provider,
-        model: session.model,
-      };
+  if (apiKey) {
+    const preset = resolveAIModelPreset(modelPresetId);
+    if (!preset) {
+      throw new UnknownAIModelPresetError();
     }
 
-    apiKeySessions.delete(apiKeySessionId);
-  }
-
-  const preset = resolveAIModelPreset(modelPresetId);
-  if (!preset) {
-    throw new UnknownAIModelPresetError();
-  }
-
-  if (apiKey) {
     return {
       apiKey,
       apiKeySessionId: createApiKeySession(apiKey, preset.id),
@@ -175,6 +210,23 @@ function resolveAIModel(
     };
   }
 
+  const session = getApiKeySession(req);
+  if (session) {
+    session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+    return {
+      apiKey: session.data.apiKey,
+      apiKeySessionId: session.id,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    };
+  }
+
+  const preset = resolveAIModelPreset(modelPresetId);
+  if (!preset) {
+    throw new UnknownAIModelPresetError();
+  }
+
   return {
     apiKey: "",
     apiKeySessionId: "",
@@ -182,6 +234,64 @@ function resolveAIModel(
     provider: preset.provider,
     model: preset.model,
   };
+}
+
+function withApiKeySessionCookie(
+  response: NextResponse,
+  req: NextRequest,
+  resolvedAIModel: ResolvedAIModel
+): NextResponse {
+  if (!resolvedAIModel.apiKeySessionId) {
+    return response;
+  }
+
+  const secure = isSecureRequest(req);
+  response.cookies.set(getApiKeySessionCookieName(req), resolvedAIModel.apiKeySessionId, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: API_KEY_SESSION_TTL_MS / 1000,
+  });
+
+  return response;
+}
+
+function getApiKeySession(
+  req: NextRequest
+): { id: string; data: ApiKeySession } | null {
+  const sessionId =
+    req.cookies.get(getApiKeySessionCookieName(req))?.value ??
+    req.cookies.get(API_KEY_SESSION_COOKIE)?.value ??
+    req.cookies.get(SECURE_API_KEY_SESSION_COOKIE)?.value ??
+    "";
+  if (!sessionId) {
+    return null;
+  }
+
+  const session = apiKeySessions.get(sessionId);
+  if (!session || session.expiresAt <= Date.now()) {
+    apiKeySessions.delete(sessionId);
+    return null;
+  }
+
+  return { id: sessionId, data: session };
+}
+
+function getApiKeySessionCookieName(req: NextRequest): string {
+  return isSecureRequest(req)
+    ? SECURE_API_KEY_SESSION_COOKIE
+    : API_KEY_SESSION_COOKIE;
+}
+
+function isSecureRequest(req: NextRequest): boolean {
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  return forwardedProto === "https" || req.nextUrl.protocol === "https:";
+}
+
+function deleteApiKeySessionCookies(response: NextResponse): void {
+  response.cookies.delete(API_KEY_SESSION_COOKIE);
+  response.cookies.delete(SECURE_API_KEY_SESSION_COOKIE);
 }
 
 function createApiKeySession(apiKey: string, modelPresetId: string): string {
@@ -233,7 +343,7 @@ async function handleStartGame(
 
   const engineResult = {
     newState: state,
-    eventSummary: `${playerName}(전사), 피나(도적), 미나(마법사)가 던전 입구(1층 C6)에 도착했다. 어두운 미궁이 앞에 펼쳐져 있다.`,
+    eventSummary: `${playerName}(전사), 에이미(도적), 실루엘라(마법사)가 던전 입구(1층 C6)에 도착했다. 어두운 미궁이 앞에 펼쳐져 있다.`,
     nextActions: directions,
   };
 
@@ -255,7 +365,6 @@ async function handleStartGame(
     choices,
     gameState: state,
     statusWindow,
-    apiKeySessionId: resolvedAIModel.apiKeySessionId,
   };
 
   return NextResponse.json(response);
@@ -285,7 +394,6 @@ async function handleTalk(
     );
   }
 
-  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const actions = getTalkBiasedActions(normalizedState);
   const engineResult = {
     newState: normalizedState,
@@ -315,7 +423,6 @@ async function handleTalk(
     choices,
     gameState: normalizedState,
     statusWindow: buildStatusWindow(normalizedState),
-    apiKeySessionId,
   } satisfies GameResponse);
 }
 
@@ -332,7 +439,6 @@ async function handlePlayerAction(
     return NextResponse.json({ error: "Invalid game state" }, { status: 400 });
   }
 
-  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const normalizedState = normalizeGameState(gameState);
   const engineResult = processAction(normalizedState, action);
   const { newState } = engineResult;
@@ -351,7 +457,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -364,7 +469,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -378,7 +482,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -426,7 +529,6 @@ async function handlePlayerAction(
     choices,
     gameState: newState,
     statusWindow,
-    apiKeySessionId,
   };
 
   return NextResponse.json(response);
@@ -586,12 +688,12 @@ async function getEndingNarration(
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
 레드드래곤을 물리친 후, 시점이 TRPG 테이블로 전환됩니다.
-피나와 미나가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
-동료 호감도는 피나 ${affinity.pina}단계, 미나 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
+에이미와 실루엘라가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
+동료 호감도는 에이미 ${affinity.pina}단계, 실루엘라 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
 고풍스러운 판타지 문체에서 현실의 따뜻한 톤으로 자연스럽게 전환하세요.`
     : `당신은 TRPG 게임 마스터입니다. 패배 엔딩을 연출하세요.
 파티가 전멸했습니다. 시점이 TRPG 테이블로 전환됩니다.
-세션을 마친 피나·미나가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
+세션을 마친 에이미·실루엘라가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
   const aiProvider = createAIProvider(resolvedAIModel.provider);
@@ -615,23 +717,23 @@ function buildEndingChoices(state: GameState): ChoiceOption[] {
 
   if (affinity.pina >= 3) {
     choices.push({
-      label: "🗡️ 피나 — 약속의 후일담",
-      text: "피나와 오늘 모험 뒤의 약속을 나눈다.",
+      label: "🗡️ 에이미 — 약속의 후일담",
+      text: "에이미와 오늘 모험 뒤의 약속을 나눈다.",
       action: { type: "ending_choice", choiceId: "pina_promise" },
     });
   }
 
   if (affinity.mina >= 3) {
     choices.push({
-      label: "🔮 미나 — 조용한 후일담",
-      text: "미나와 세션이 남긴 의미를 차분히 되짚는다.",
+      label: "🔮 실루엘라 — 조용한 후일담",
+      text: "실루엘라와 세션이 남긴 의미를 차분히 되짚는다.",
       action: { type: "ending_choice", choiceId: "mina_reflection" },
     });
   }
 
   choices.push({
     label: "🎲 모두 — 세션 마무리",
-    text: "피나와 미나와 함께 오늘의 세션을 따뜻하게 마무리한다.",
+    text: "에이미와 실루엘라와 함께 오늘의 세션을 따뜻하게 마무리한다.",
     action: { type: "ending_choice", choiceId: "shared_table" },
   });
 
@@ -646,16 +748,16 @@ async function getEndingChoiceNarration(
 ): Promise<string> {
   const focus = {
     pina_promise:
-      "피나가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
+      "에이미가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
     mina_reflection:
-      "미나가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
+      "실루엘라가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
     shared_table:
-      "피나와 미나가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
+      "에이미와 실루엘라가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
   }[choiceId] ?? "파티가 함께 정복 세션을 마무리하는 공통 후일담";
 
   const systemPrompt = `당신은 TRPG 게임 마스터입니다. 정복 엔딩 이후의 짧은 후일담 에필로그를 작성하세요.
 선택된 후일담: ${focus}.
-동료 호감도는 피나 ${state.party.affinity.pina}단계, 미나 ${state.party.affinity.mina}단계입니다.
+동료 호감도는 에이미 ${state.party.affinity.pina}단계, 실루엘라 ${state.party.affinity.mina}단계입니다.
 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고, 과한 연애 묘사는 피하세요.
 텍스트만 반환하세요. JSON은 반환하지 마세요.`;
 

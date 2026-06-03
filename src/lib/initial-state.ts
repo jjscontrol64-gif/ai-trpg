@@ -31,7 +31,7 @@ export function createInitialState(
   };
 
   const pina: Character = {
-    name: "피나",
+    name: "에이미",
     role: "rogue",
     hp: 10,
     maxHp: 10,
@@ -44,7 +44,7 @@ export function createInitialState(
   };
 
   const mina: Character = {
-    name: "미나",
+    name: "실루엘라",
     role: "mage",
     hp: 10,
     maxHp: 10,

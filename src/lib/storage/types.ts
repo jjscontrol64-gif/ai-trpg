@@ -6,6 +6,7 @@ export interface SaveSnapshot {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
   saveId: string;
   playerName: string;
+  modelPresetId?: string;
   gameState: GameState;
   beats: StoryBeat[];
   currentChoices: ChoiceOption[];

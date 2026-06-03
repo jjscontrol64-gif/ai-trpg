@@ -50,12 +50,4 @@ export const itemEffects = [
       };
     },
   },
-  {
-    id: "auto_flee",
-    apply: ({ state, item, getNextActions }) => ({
-      state,
-      eventSummary: `${item.name} 사용. 전투 이탈 준비.`,
-      nextActions: getNextActions(state),
-    }),
-  },
 ] satisfies ItemEffectDefinition[];
