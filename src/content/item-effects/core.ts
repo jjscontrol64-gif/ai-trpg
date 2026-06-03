@@ -11,7 +11,7 @@ export const itemEffects = [
 
       return {
         state,
-        eventSummary: `${member.name}이(가) ${item.name} 사용. HP +${amount} 회복.`,
+        eventSummary: `${member.name}가(이) ${item.name} 사용. HP +${amount} 회복.`,
         nextActions: getNextActions(state),
       };
     },
@@ -45,7 +45,7 @@ export const itemEffects = [
 
       return {
         state,
-        eventSummary: `${member.name}이(가) ${item.name} 사용. 특수액션 +${amount} 회복.`,
+        eventSummary: `${member.name}가(이) ${item.name} 사용. 특수액션 +${amount} 회복.`,
         nextActions: getNextActions(state),
       };
     },

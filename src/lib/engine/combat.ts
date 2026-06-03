@@ -155,7 +155,7 @@ function applyMonsterDamage(
   attackerIndex: number
 ): number {
   if (monster.difficulty === "boss") {
-    return applyBossDamage(state, monster);
+    return applyBossDamage(state, monster, attackerIndex);
   }
   const dmg = monster.damage;
   state.party.members[attackerIndex].hp = Math.max(
@@ -165,7 +165,11 @@ function applyMonsterDamage(
   return dmg;
 }
 
-function applyBossDamage(state: GameState, monster: MonsterState): number {
+function applyBossDamage(
+  state: GameState,
+  monster: MonsterState,
+  attackerIndex: number
+): number {
   const floor = state.party.floor;
 
   if (floor === 1) {
@@ -190,6 +194,10 @@ function applyBossDamage(state: GameState, monster: MonsterState): number {
       }
     }
     bc.curseTurn++;
+    state.party.members[attackerIndex].hp = Math.max(
+      0,
+      state.party.members[attackerIndex].hp - monster.damage
+    );
     return monster.damage;
   }
 
@@ -208,9 +216,17 @@ function applyBossDamage(state: GameState, monster: MonsterState): number {
     if (state.combat.turnCount - bc.breathTurn >= 3) {
       bc.breathCharging = true;
     }
+    state.party.members[attackerIndex].hp = Math.max(
+      0,
+      state.party.members[attackerIndex].hp - monster.damage
+    );
     return monster.damage;
   }
 
+  state.party.members[attackerIndex].hp = Math.max(
+    0,
+    state.party.members[attackerIndex].hp - monster.damage
+  );
   return monster.damage;
 }
 

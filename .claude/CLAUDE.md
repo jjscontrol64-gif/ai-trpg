@@ -8,7 +8,7 @@
 Framework  : Next.js 16 App Router
 Frontend   : React 19 + TypeScript strict
 Backend    : Next.js Route Handler (/app/api/game)
-AI         : Gemini API, gemini-2.5-flash
+AI         : Gemini API, gemini-2.5
 Storage    : localStorage
 Deploy     : Vercel
 ```

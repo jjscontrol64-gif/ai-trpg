@@ -15,7 +15,7 @@ import {
   createAIProvider,
   resolveAIModelPreset,
 } from "@/lib/ai";
-import { mapChoicesToActions, ModelChoice, normalizeActionIndex } from "@/lib/action-options";
+import { MAX_CHOICE_COUNT, mapChoicesToActions, ModelChoice, normalizeActionIndex } from "@/lib/action-options";
 
 type GameNarrationData = {
   narration: string;
@@ -41,6 +41,7 @@ type ResolvedAIModel = {
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
 const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
 const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
+const AI_PROMPT_HISTORY_LIMIT = 10;
 const apiKeySessions = new Map<string, ApiKeySession>();
 
 class UnknownAIModelPresetError extends Error {}
@@ -402,7 +403,7 @@ async function handleTalk(
   };
 
   const systemPrompt = buildSystemPrompt(normalizedState);
-  const history = normalizedState.messageHistory.slice(-10);
+  const history = normalizedState.messageHistory.slice(-AI_PROMPT_HISTORY_LIMIT);
   const messages = [
     ...history.map((m) => ({
       role: m.role as "user" | "assistant",
@@ -487,7 +488,7 @@ async function handlePlayerAction(
 
   const systemPrompt = buildSystemPrompt(newState);
 
-  const history = newState.messageHistory.slice(-10);
+  const history = newState.messageHistory.slice(-AI_PROMPT_HISTORY_LIMIT);
   const messages = [
     ...history.map((m) => ({
       role: m.role as "user" | "assistant",
@@ -665,7 +666,7 @@ function normalizeChoices(
       text: choice.text,
       actionIndex: normalizeActionIndex(choice.actionIndex),
     }))
-    .slice(0, 3);
+    .slice(0, MAX_CHOICE_COUNT);
 
   return normalized.length > 0 ? normalized : fallbackChoices();
 }
@@ -675,6 +676,7 @@ function fallbackChoices(): GameNarrationData["choices"] {
     { label: "\uacc4\uc18d \ud0d0\ud5d8", text: "\uc8fc\uc704\ub97c \ub458\ub7ec\ubcf8\ub2e4" },
     { label: "\uc870\uc2ec\ud788 \uc804\uc9c4", text: "\ubb34\uae30\ub97c \uc900\ube44\ud558\uace0 \ucc9c\ucc9c\ud788 \uc804\uc9c4\ud55c\ub2e4" },
     { label: "\uc8fc\ubcc0 \ud0d0\uc0c9", text: "\uc8fc\ubcc0\uc744 \uc790\uc138\ud788 \uc0b4\ud540\ub2e4" },
+    { label: "\ub3d9\ub8cc\uc640 \uc0c1\uc758", text: "\ub3d9\ub8cc\ub4e4\uc758 \uc758\uacac\uc744 \ub4e3\uace0 \ub2e4\uc74c \ud589\ub3d9\uc744 \uc815\ud55c\ub2e4" },
   ];
 }
 
@@ -737,7 +739,7 @@ function buildEndingChoices(state: GameState): ChoiceOption[] {
     action: { type: "ending_choice", choiceId: "shared_table" },
   });
 
-  return choices.slice(0, 3);
+  return choices.slice(0, MAX_CHOICE_COUNT);
 }
 
 async function getEndingChoiceNarration(

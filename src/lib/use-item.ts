@@ -104,7 +104,7 @@ export function useItem(
     const target = resolvedTargetIndex ?? 0;
     const member = s.party.members[target];
     member.hp = Math.min(member.maxHp, member.hp + item.hpRestore);
-    summary = `${member.name}이(가) ${item.name} 사용. HP +${item.hpRestore} 회복.`;
+    summary = `${member.name}가(이) ${item.name} 사용. HP +${item.hpRestore} 회복.`;
   } else if (item.allHpRestore) {
     for (const m of s.party.members) {
       if (m.hp > 0) m.hp = Math.min(m.maxHp, m.hp + item.allHpRestore);
@@ -116,7 +116,7 @@ export function useItem(
     for (const action of member.actions) {
       action.remaining = Math.min(action.max, action.remaining + item.actionRestore);
     }
-    summary = `${member.name}이(가) ${item.name} 사용. 특수액션 +${item.actionRestore} 회복.`;
+    summary = `${member.name}가(이) ${item.name} 사용. 특수액션 +${item.actionRestore} 회복.`;
   }
 
   return {

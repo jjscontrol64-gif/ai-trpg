@@ -3,9 +3,12 @@
 import { ChoiceOption } from "@/lib/types";
 
 interface TRPGChoiceProps {
+  choices?: ChoiceOption[];
   choice1?: ChoiceOption | null;
   choice2?: ChoiceOption | null;
   choice3?: ChoiceOption | null;
+  choice4?: ChoiceOption | null;
+  choice5?: ChoiceOption | null;
   onSelect: (choice: ChoiceOption) => void;
   disabled?: boolean;
 }
@@ -43,13 +46,16 @@ function ChoiceButton({
 }
 
 export default function TRPGChoice({
+  choices: choiceList,
   choice1,
   choice2,
   choice3,
+  choice4,
+  choice5,
   onSelect,
   disabled = false,
 }: TRPGChoiceProps) {
-  const choices = [choice1, choice2, choice3].filter(
+  const choices = (choiceList ?? [choice1, choice2, choice3, choice4, choice5]).filter(
     (choice): choice is ChoiceOption => Boolean(choice)
   );
 

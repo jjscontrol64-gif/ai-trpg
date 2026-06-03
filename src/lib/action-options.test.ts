@@ -50,4 +50,27 @@ describe("mapChoicesToActions", () => {
     expect(choices[0].action).toBe(puzzleActions[0]);
     expect(choices[1].action).toBe(puzzleActions[1]);
   });
+
+  it("keeps up to five model choices", () => {
+    const choices = mapChoicesToActions(
+      [
+        { label: "one", text: "first" },
+        { label: "two", text: "second" },
+        { label: "three", text: "third" },
+        { label: "four", text: "fourth" },
+        { label: "five", text: "fifth" },
+        { label: "six", text: "sixth" },
+      ],
+      puzzleActions
+    );
+
+    expect(choices).toHaveLength(5);
+    expect(choices.map((choice) => choice.label)).toEqual([
+      "one",
+      "two",
+      "three",
+      "four",
+      "five",
+    ]);
+  });
 });

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { MAX_CHOICE_COUNT } from "@/lib/action-options";
 import { ChoiceOption } from "@/lib/types";
+
+const CHOICE_KEYS = Array.from({ length: MAX_CHOICE_COUNT }, (_, idx) =>
+  String(idx + 1)
+);
 
 export default function CommandMenu({
   choices,
@@ -36,7 +41,7 @@ export default function CommandMenu({
       ) {
         return;
       }
-      const i = ["1", "2", "3"].indexOf(e.key);
+      const i = CHOICE_KEYS.indexOf(e.key);
       if (i >= 0 && choices[i] && !disabled) onSelect(choices[i]);
     };
     window.addEventListener("keydown", h);

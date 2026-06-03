@@ -8,7 +8,7 @@ Next.js 기반 텍스트 던전 탐험 TRPG입니다. 플레이어는 전사를 
 Framework  : Next.js 16 App Router
 Frontend   : React 19 + TypeScript strict
 Backend    : Next.js Route Handler (/app/api/game)
-AI         : Gemini API, gemini-2.5-flash
+AI         : Gemini API, gemini-2.5
 Storage    : localStorage
 Deploy     : Vercel
 ```
