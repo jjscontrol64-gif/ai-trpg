@@ -321,7 +321,7 @@ export default function StartScreen({
                 disabled={loading}
               />
               <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                Key is kept only in memory for this session and is sent to the server only for AI provider calls.
+                Key is sent once to create a secure server session, then reused through an HttpOnly cookie.
               </p>
             </div>
             <button

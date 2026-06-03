@@ -39,21 +39,52 @@ type ResolvedAIModel = {
 };
 
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
+const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
+const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
 const apiKeySessions = new Map<string, ApiKeySession>();
 
 class UnknownAIModelPresetError extends Error {}
+
+export function GET(req: NextRequest) {
+  pruneExpiredApiKeySessions();
+
+  const session = getApiKeySession(req);
+  if (!session) {
+    const response = NextResponse.json({ authenticated: false });
+    deleteApiKeySessionCookies(response);
+    return response;
+  }
+
+  session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+
+  return withApiKeySessionCookie(
+    NextResponse.json({
+      authenticated: true,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    }),
+    req,
+    {
+      apiKey: session.data.apiKey,
+      apiKeySessionId: session.id,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    }
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { type } = body;
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-    const apiKeySessionId =
-      typeof body.apiKeySessionId === "string" ? body.apiKeySessionId : "";
     const modelPresetId =
       typeof body.modelPresetId === "string" ? body.modelPresetId : "";
 
     if (
+      type !== "configure_api_key" &&
       type !== "start_game" &&
       type !== "player_action" &&
       type !== "talk"
@@ -61,27 +92,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
     }
 
-    const resolvedAIModel = resolveAIModel(apiKey, apiKeySessionId, modelPresetId);
+    const resolvedAIModel = resolveAIModel(req, apiKey, modelPresetId);
+
+    if (type === "configure_api_key") {
+      return withApiKeySessionCookie(
+        NextResponse.json({ ok: true }),
+        req,
+        resolvedAIModel
+      );
+    }
 
     if (type === "start_game") {
-      return await handleStartGame(
-        body.playerName,
-        parseDifficulty(body.difficulty),
+      return withApiKeySessionCookie(
+        await handleStartGame(
+          body.playerName,
+          parseDifficulty(body.difficulty),
+          resolvedAIModel
+        ),
+        req,
         resolvedAIModel
       );
     }
 
     if (type === "player_action") {
-      return await handlePlayerAction(
-        body.gameState,
-        body.action,
-        body.choiceText,
+      return withApiKeySessionCookie(
+        await handlePlayerAction(
+          body.gameState,
+          body.action,
+          body.choiceText,
+          resolvedAIModel
+        ),
+        req,
         resolvedAIModel
       );
     }
 
     if (type === "talk") {
-      return await handleTalk(body.gameState, resolvedAIModel);
+      return withApiKeySessionCookie(
+        await handleTalk(body.gameState, resolvedAIModel),
+        req,
+        resolvedAIModel
+      );
     }
 
     return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
@@ -140,32 +191,16 @@ export async function POST(req: NextRequest) {
 }
 
 function resolveAIModel(
+  req: NextRequest,
   apiKey: string,
-  apiKeySessionId: string,
   modelPresetId: string
 ): ResolvedAIModel {
-  if (apiKeySessionId) {
-    const session = apiKeySessions.get(apiKeySessionId);
-    if (session && session.expiresAt > Date.now()) {
-      session.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
-      return {
-        apiKey: session.apiKey,
-        apiKeySessionId,
-        modelPresetId: session.modelPresetId,
-        provider: session.provider,
-        model: session.model,
-      };
+  if (apiKey) {
+    const preset = resolveAIModelPreset(modelPresetId);
+    if (!preset) {
+      throw new UnknownAIModelPresetError();
     }
 
-    apiKeySessions.delete(apiKeySessionId);
-  }
-
-  const preset = resolveAIModelPreset(modelPresetId);
-  if (!preset) {
-    throw new UnknownAIModelPresetError();
-  }
-
-  if (apiKey) {
     return {
       apiKey,
       apiKeySessionId: createApiKeySession(apiKey, preset.id),
@@ -175,6 +210,23 @@ function resolveAIModel(
     };
   }
 
+  const session = getApiKeySession(req);
+  if (session) {
+    session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+    return {
+      apiKey: session.data.apiKey,
+      apiKeySessionId: session.id,
+      modelPresetId: session.data.modelPresetId,
+      provider: session.data.provider,
+      model: session.data.model,
+    };
+  }
+
+  const preset = resolveAIModelPreset(modelPresetId);
+  if (!preset) {
+    throw new UnknownAIModelPresetError();
+  }
+
   return {
     apiKey: "",
     apiKeySessionId: "",
@@ -182,6 +234,64 @@ function resolveAIModel(
     provider: preset.provider,
     model: preset.model,
   };
+}
+
+function withApiKeySessionCookie(
+  response: NextResponse,
+  req: NextRequest,
+  resolvedAIModel: ResolvedAIModel
+): NextResponse {
+  if (!resolvedAIModel.apiKeySessionId) {
+    return response;
+  }
+
+  const secure = isSecureRequest(req);
+  response.cookies.set(getApiKeySessionCookieName(req), resolvedAIModel.apiKeySessionId, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: API_KEY_SESSION_TTL_MS / 1000,
+  });
+
+  return response;
+}
+
+function getApiKeySession(
+  req: NextRequest
+): { id: string; data: ApiKeySession } | null {
+  const sessionId =
+    req.cookies.get(getApiKeySessionCookieName(req))?.value ??
+    req.cookies.get(API_KEY_SESSION_COOKIE)?.value ??
+    req.cookies.get(SECURE_API_KEY_SESSION_COOKIE)?.value ??
+    "";
+  if (!sessionId) {
+    return null;
+  }
+
+  const session = apiKeySessions.get(sessionId);
+  if (!session || session.expiresAt <= Date.now()) {
+    apiKeySessions.delete(sessionId);
+    return null;
+  }
+
+  return { id: sessionId, data: session };
+}
+
+function getApiKeySessionCookieName(req: NextRequest): string {
+  return isSecureRequest(req)
+    ? SECURE_API_KEY_SESSION_COOKIE
+    : API_KEY_SESSION_COOKIE;
+}
+
+function isSecureRequest(req: NextRequest): boolean {
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  return forwardedProto === "https" || req.nextUrl.protocol === "https:";
+}
+
+function deleteApiKeySessionCookies(response: NextResponse): void {
+  response.cookies.delete(API_KEY_SESSION_COOKIE);
+  response.cookies.delete(SECURE_API_KEY_SESSION_COOKIE);
 }
 
 function createApiKeySession(apiKey: string, modelPresetId: string): string {
@@ -255,7 +365,6 @@ async function handleStartGame(
     choices,
     gameState: state,
     statusWindow,
-    apiKeySessionId: resolvedAIModel.apiKeySessionId,
   };
 
   return NextResponse.json(response);
@@ -285,7 +394,6 @@ async function handleTalk(
     );
   }
 
-  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const actions = getTalkBiasedActions(normalizedState);
   const engineResult = {
     newState: normalizedState,
@@ -315,7 +423,6 @@ async function handleTalk(
     choices,
     gameState: normalizedState,
     statusWindow: buildStatusWindow(normalizedState),
-    apiKeySessionId,
   } satisfies GameResponse);
 }
 
@@ -332,7 +439,6 @@ async function handlePlayerAction(
     return NextResponse.json({ error: "Invalid game state" }, { status: 400 });
   }
 
-  const apiKeySessionId = resolvedAIModel.apiKeySessionId;
   const normalizedState = normalizeGameState(gameState);
   const engineResult = processAction(normalizedState, action);
   const { newState } = engineResult;
@@ -351,7 +457,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -364,7 +469,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -378,7 +482,6 @@ async function handlePlayerAction(
       gameState: newState,
       statusWindow: buildStatusWindow(newState),
       diceResult: engineResult.diceResult,
-      apiKeySessionId,
     } satisfies GameResponse);
   }
 
@@ -426,7 +529,6 @@ async function handlePlayerAction(
     choices,
     gameState: newState,
     statusWindow,
-    apiKeySessionId,
   };
 
   return NextResponse.json(response);

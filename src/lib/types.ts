@@ -232,5 +232,4 @@ export interface GameResponse {
   choices: ChoiceOption[];
   gameState: GameState;
   statusWindow: StatusWindowData;
-  apiKeySessionId?: string;
 }

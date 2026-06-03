@@ -31,6 +31,14 @@ const DEFAULT_SAVE_ID = "default";
 const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 type SaveImportStatus = "idle" | "imported" | "error";
+type GameSessionStatus =
+  | { authenticated: false }
+  | {
+      authenticated: true;
+      modelPresetId: string;
+      provider: string;
+      model: string;
+    };
 
 const ATTACK_FX_COLORS: Record<string, string> = {
   slash: "#ffe9bd",
@@ -91,6 +99,7 @@ function applyInspirationToChoice(
 async function postGame<T>(payload: unknown): Promise<T> {
   const response = await fetch("/api/game", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
     },
@@ -113,6 +122,19 @@ async function postGame<T>(payload: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function getGameSessionStatus(): Promise<GameSessionStatus> {
+  const response = await fetch("/api/game", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    return { authenticated: false };
+  }
+
+  return response.json() as Promise<GameSessionStatus>;
+}
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -126,6 +148,25 @@ function createSaveFileName(playerName: string): string {
   const date = new Date().toISOString().slice(0, 10);
 
   return `ai-trpg-${safePlayerName || "save"}-${date}.json`;
+}
+
+function buildSaveSnapshot(
+  playerName: string,
+  modelPresetId: string,
+  gameState: GameState,
+  beats: StoryBeat[],
+  currentChoices: ChoiceOption[]
+): SaveSnapshot {
+  return {
+    schemaVersion: SAVE_SCHEMA_VERSION,
+    saveId: DEFAULT_SAVE_ID,
+    playerName,
+    modelPresetId,
+    gameState,
+    beats,
+    currentChoices,
+    savedAt: new Date().toISOString(),
+  };
 }
 
 function getPhaseLabel(phase?: GameState["phase"]) {
@@ -214,9 +255,7 @@ export default function HomePage() {
   const [statusWindow, setStatusWindow] = useState<StatusWindowData | null>(null);
   const [previousSnapshot, setPreviousSnapshot] = useState<GameSnapshot | null>(null);
   const [playerName, setPlayerName] = useState("");
-  const [aiApiKey, setAiApiKey] = useState("");
   const [modelPresetId, setModelPresetId] = useState(DEFAULT_MODEL_PRESET_ID);
-  const [apiKeySessionId, setApiKeySessionId] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const [importStatus, setImportStatus] = useState<SaveImportStatus>("idle");
@@ -228,10 +267,32 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
-    storageProvider.load(DEFAULT_SAVE_ID).then((snapshot) => {
-      if (!cancelled) {
-        setSavedSnapshot(snapshot);
+    storageProvider.load(DEFAULT_SAVE_ID).then(async (snapshot) => {
+      if (cancelled) return;
+
+      setSavedSnapshot(snapshot);
+      if (!snapshot) return;
+
+      const sessionStatus = await getGameSessionStatus();
+      if (cancelled || !sessionStatus.authenticated) {
+        return;
       }
+
+      const restoredModelPresetId =
+        snapshot.modelPresetId || sessionStatus.modelPresetId || DEFAULT_MODEL_PRESET_ID;
+      const normalizedGameState = normalizeGameState(snapshot.gameState);
+
+      setPlayerName(snapshot.playerName);
+      setModelPresetId(restoredModelPresetId);
+      setGameState(normalizedGameState);
+      setStatusWindow(buildStatusWindow(normalizedGameState));
+      setCurrentChoices(snapshot.currentChoices);
+      setBeats(snapshot.beats);
+      setChoiceSubmitStatus("idle");
+      setLastSubmittedChoice(null);
+      setPreviousSnapshot(null);
+      setInspirationArmed(false);
+      setAttackFxEvent(null);
     });
 
     return () => {
@@ -252,6 +313,36 @@ export default function HomePage() {
       setInspirationArmed(false);
     }
   }, [gameState]);
+
+  useEffect(() => {
+    if (
+      !gameState ||
+      !playerName ||
+      choiceSubmitStatus !== "idle"
+    ) {
+      return;
+    }
+
+    const snapshot = buildSaveSnapshot(
+      playerName,
+      modelPresetId,
+      gameState,
+      beats,
+      currentChoices
+    );
+
+    setSavedSnapshot(snapshot);
+    storageProvider.save(snapshot).catch(() => {
+      setSaveStatus("error");
+    });
+  }, [
+    beats,
+    choiceSubmitStatus,
+    currentChoices,
+    gameState,
+    modelPresetId,
+    playerName,
+  ]);
 
   const latestAssistantBeat = useMemo(() => {
     return [...beats].reverse().find((beat) => beat.role === "assistant") as
@@ -284,9 +375,7 @@ export default function HomePage() {
         });
 
         setPlayerName(name);
-        setAiApiKey("");
         setModelPresetId(selectedModelPresetId);
-        setApiKeySessionId(response.apiKeySessionId ?? "");
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
@@ -313,21 +402,31 @@ export default function HomePage() {
   const handleResume = (apiKey: string, selectedModelPresetId: string) => {
     if (!savedSnapshot) return;
 
-    setError(null);
-    setChoiceSubmitStatus("idle");
-    setLastSubmittedChoice(null);
-    setPreviousSnapshot(null);
-    setPlayerName(savedSnapshot.playerName);
-    setAiApiKey(apiKey);
-    setModelPresetId(selectedModelPresetId);
-    setApiKeySessionId("");
-    const normalizedGameState = normalizeGameState(savedSnapshot.gameState);
-    setGameState(normalizedGameState);
-    setStatusWindow(buildStatusWindow(normalizedGameState));
-    setCurrentChoices(savedSnapshot.currentChoices);
-    setBeats(savedSnapshot.beats);
-    setInspirationArmed(false);
-    setAttackFxEvent(null);
+    startTransition(async () => {
+      try {
+        setError(null);
+        await postGame<{ ok: boolean }>({
+          type: "configure_api_key",
+          modelPresetId: selectedModelPresetId,
+          apiKey,
+        });
+
+        setChoiceSubmitStatus("idle");
+        setLastSubmittedChoice(null);
+        setPreviousSnapshot(null);
+        setPlayerName(savedSnapshot.playerName);
+        setModelPresetId(selectedModelPresetId);
+        const normalizedGameState = normalizeGameState(savedSnapshot.gameState);
+        setGameState(normalizedGameState);
+        setStatusWindow(buildStatusWindow(normalizedGameState));
+        setCurrentChoices(savedSnapshot.currentChoices);
+        setBeats(savedSnapshot.beats);
+        setInspirationArmed(false);
+        setAttackFxEvent(null);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "API key setup failed.");
+      }
+    });
   };
 
   const handleSave = () => {
@@ -337,13 +436,13 @@ export default function HomePage() {
       try {
         setSaveStatus("idle");
         const snapshot: SaveSnapshot = {
-          schemaVersion: SAVE_SCHEMA_VERSION,
-          saveId: DEFAULT_SAVE_ID,
-          playerName,
-          gameState,
-          beats,
-          currentChoices,
-          savedAt: new Date().toISOString(),
+          ...buildSaveSnapshot(
+            playerName,
+            modelPresetId,
+            gameState,
+            beats,
+            currentChoices
+          ),
         };
 
         await storageProvider.save(snapshot);
@@ -360,13 +459,13 @@ export default function HomePage() {
     if (!gameState || !playerName) return;
 
     const snapshot: SaveSnapshot = {
-      schemaVersion: SAVE_SCHEMA_VERSION,
-      saveId: DEFAULT_SAVE_ID,
-      playerName,
-      gameState,
-      beats,
-      currentChoices,
-      savedAt: new Date().toISOString(),
+      ...buildSaveSnapshot(
+        playerName,
+        modelPresetId,
+        gameState,
+        beats,
+        currentChoices
+      ),
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
       type: "application/json",
@@ -450,9 +549,7 @@ export default function HomePage() {
           gameState,
           action: submittedChoice.action,
           choiceText: submittedChoice.text,
-          apiKeySessionId,
           modelPresetId,
-          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
         const nextAttackFxEvent = createAttackFxEvent(
           submittedChoice.action,
@@ -460,8 +557,6 @@ export default function HomePage() {
           response
         );
 
-        setAiApiKey("");
-        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
@@ -502,13 +597,9 @@ export default function HomePage() {
         const response = await postGame<GameResponse>({
           type: "talk",
           gameState,
-          apiKeySessionId,
           modelPresetId,
-          apiKey: apiKeySessionId ? undefined : aiApiKey,
         });
 
-        setAiApiKey("");
-        setApiKeySessionId(response.apiKeySessionId ?? apiKeySessionId);
         setGameState(response.gameState);
         setStatusWindow(response.statusWindow);
         setCurrentChoices(response.choices);
