@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "generate:registry": "node scripts/generate-registry.mjs",
+    "generate:sfx": "node scripts/generate-sfx.mjs",
     "prebuild": "npm run generate:registry",
     "build": "next build",
     "start": "next start",

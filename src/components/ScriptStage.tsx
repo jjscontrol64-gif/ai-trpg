@@ -14,6 +14,15 @@ export interface AttackFxEvent {
   turns?: number;
 }
 
+const ATTACK_SFX: Record<string, string> = {
+  slash: "/sfx/argon-slash.wav",
+  smash: "/sfx/argon-heavy-hit.wav",
+  stab: "/sfx/fina-stab.wav",
+  ambush: "/sfx/fina-backstab.wav",
+  magic: "/sfx/mina-arcane-bolt.wav",
+  bind: "/sfx/mina-arcane-bind.wav",
+};
+
 export default function ScriptStage({
   beats,
   monster,
@@ -31,6 +40,8 @@ export default function ScriptStage({
   const arenaRef = useRef<HTMLDivElement | null>(null);
   const targetRef = useRef<HTMLDivElement | null>(null);
   const fxLayerRef = useRef<HTMLDivElement | null>(null);
+  const sfxRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const lastSfxEventIdRef = useRef<string | null>(null);
   const fxInstanceRef = useRef<{
     play: (name: string, opts?: Record<string, unknown>) => void;
     ctx: { bound: (on: boolean) => void };
@@ -105,6 +116,42 @@ export default function ScriptStage({
       fxLayer: fxLayerRef.current,
     });
   }, [displayMonster, fxScriptReady]);
+
+  useEffect(() => {
+    const sfx = new Map<string, HTMLAudioElement>();
+
+    Object.entries(ATTACK_SFX).forEach(([effect, src]) => {
+      const audio = new Audio(src);
+      audio.preload = "auto";
+      audio.volume = 0.58;
+      sfx.set(effect, audio);
+    });
+
+    sfxRef.current = sfx;
+
+    return () => {
+      sfx.forEach((audio) => {
+        audio.pause();
+        audio.src = "";
+      });
+      sfx.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!attackFxEvent || lastSfxEventIdRef.current === attackFxEvent.id) return;
+
+    lastSfxEventIdRef.current = attackFxEvent.id;
+    const audio = sfxRef.current.get(attackFxEvent.effect);
+    if (!audio) return;
+
+    audio.currentTime = 0;
+    audio
+      .play()
+      .catch(() => {
+        // Browser audio policy can reject playback before the first trusted gesture.
+      });
+  }, [attackFxEvent]);
 
   useEffect(() => {
     if (!attackFxEvent || !fxInstanceRef.current) return;
