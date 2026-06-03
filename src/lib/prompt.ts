@@ -87,7 +87,7 @@ export function buildSystemPrompt(state: GameState): string {
 
 // ## 응답 규칙
 // 1. narration: 내레이션 텍스트. 에이미·실루엘라의 대사를 자연스럽게 포함.
-// 2. choices: 정확히 3개의 선택지를 생성. 각 선택지는 actionIndex(아래 가능한 행동의 actionIndex 숫자), label(짧은 키워드), text(시도 묘사문)를 포함.
+// 2. choices: 기본 4개, 장면상 필요할 때 최대 5개의 선택지를 생성. 각 선택지는 actionIndex(아래 가능한 행동의 actionIndex 숫자), label(짧은 키워드), text(시도 묘사문)를 포함.
 // 3. 가능한 행동에는 수행 캐릭터와 능력치가 "이름(역할, 스탯 값)" 형태로 표시됩니다. 판정·전투 행동은 해당 능력치가 가장 높은 캐릭터를 우선 선택하세요. (예: 고대 문자 해독 등 지능 판정은 INT가 높은 실루엘라, 힘 판정은 전사, 민첩 판정은 에이미)
 // 4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 실루엘라 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요. 단, "휴식하고 길을 나선다"처럼 특정 캐릭터가 수행하지 않는 선택지는 명령형 라벨로 작성해도 됩니다.
 // 5. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
@@ -127,7 +127,7 @@ export function buildSystemPrompt(state: GameState): string {
 
 ## 출력 규칙 (JSON 전용, 다른 텍스트 금지)
 1. 'narration': 상황 묘사와 동료 대사를 자연스럽게 포함한 텍스트.
-2. 'choices': 정확히 3개의 선택지 배열. (actionIndex, label, text 포함)
+2. 'choices': 기본 ${DEFAULT_CHOICE_COUNT}개의 선택지 배열. 장면상 전술/대화/탐색 분기가 뚜렷하게 필요할 때만 최대 ${MAX_CHOICE_COUNT}개까지 허용. (actionIndex, label, text 포함)
 3. 선택지는 가능한 행동 목록의 actionIndex와 일치시킬 것.
 4. 라벨 형식: "[적절한 이모지] [수행 캐릭터명] — 키워드" (예: 📖 실루엘라 — 문자 해독). 공통 행동은 명령형 가능.
 5. 적합한 캐릭터 매칭: 판정 스탯이 가장 높은 동료 우선 배정 (지능->실루엘라, 힘->전사, 민첩->에이미). text에 해당 캐릭터의 행동 묘사.
@@ -142,7 +142,8 @@ export function buildSystemPrompt(state: GameState): string {
   "choices": [
     { "actionIndex": 0, "label": "🧭 ${warrior.name} — 키워드", "text": "묘사" },
     { "actionIndex": 1, "label": "⚔️ 에이미 — 키워드", "text": "묘사" },
-    { "actionIndex": 2, "label": "🛡️ 실루엘라 — 키워드", "text": "묘사" }
+    { "actionIndex": 2, "label": "🛡️ 실루엘라 — 키워드", "text": "묘사" },
+    { "actionIndex": 3, "label": "✨ 추가 선택지 — 키워드", "text": "묘사" }
   ]
 }
 
@@ -196,11 +197,11 @@ export function buildUserMessage(
       ? `\n- 이미 더없이 깊은 유대를 쌓았으니, 호감도를 더 끌어올리려 애쓰기보다 그 신뢰가 자연스레 묻어나는 장면으로 그리세요.`
       : `\n- 방문할 때마다 화제를 바꿔 신선하게 만드세요: 지난 전투의 회고, 소소한 농담, 서로의 과거나 꿈, 걱정과 격려 등에서 골라보세요.`;
     msg += `\n- 전투·판정·자원 변화·몬스터 행동은 일어나지 않습니다. 대화 그 자체에 무게를 두세요.`;
-    msg += `\n- 나레이션의 무게중심은 대화에 두되, 이어서 플레이어가 움직일 수 있도록 가능한 행동(이동 등)으로 3개의 선택지를 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 값을 그대로 넣으세요.`;
+    msg += `\n- 나레이션의 무게중심은 대화에 두되, 이어서 플레이어가 움직일 수 있도록 가능한 행동(이동 등)으로 기본 ${DEFAULT_CHOICE_COUNT}개의 선택지를 만들어주세요. 장면상 분기가 뚜렷하면 최대 ${MAX_CHOICE_COUNT}개까지 허용합니다. 각 선택지의 actionIndex는 선택한 행동의 값을 그대로 넣으세요.`;
   } else if (options.talkBiased) {
     msg += `\n이번 응답은 플레이어가 동료들과 대화하며 다음 행동을 다시 고르는 장면입니다. 상태 변화, 다이스 판정, 자원 소모, 몬스터 행동은 일어나지 않습니다. 에이미와 실루엘라의 대화를 중심으로 짧게 묘사하고, 가능한 행동 중 탐색 스킬(패스파인딩, 연금생성)이 있으면 선택지에 최소 1개 포함하세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요.`;
   } else {
-    msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
+    msg += `\n위 행동들 중에서 기본 ${DEFAULT_CHOICE_COUNT}개를 선택지로 만들어주세요. 장면상 분기가 뚜렷하면 최대 ${MAX_CHOICE_COUNT}개까지 허용합니다. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
   }
 
   msg += `\n\n[Choice count policy]\nReturn ${DEFAULT_CHOICE_COUNT} choices by default. Use up to ${MAX_CHOICE_COUNT} only when the scene needs meaningfully different options.`;
