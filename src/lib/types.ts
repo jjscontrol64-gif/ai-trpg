@@ -143,6 +143,17 @@ export type StoryBeat =
       text: string;
     };
 
+export type HealFxKind = "heal" | "allheal" | "action";
+
+export interface HealFxEvent {
+  id: string;
+  targets: {
+    index: number;
+    kind: HealFxKind;
+    amount: number;
+  }[];
+}
+
 export interface ChoiceOption {
   label: string;
   text: string;

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./attack-fx.css";
+@import "./heal-fx.css";
 
 :root {
   --bg-primary: #090b10;

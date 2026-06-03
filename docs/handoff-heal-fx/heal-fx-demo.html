@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>캐릭터 상태 변화 이펙트 시안 · 아이템 사용</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="heal-fx.css" />
+<style>
+  /* ===== tokens (globals.css) ===== */
+  :root{
+    --bg-card:rgba(18,22,31,0.78); --bg-panel-soft:rgba(255,255,255,0.04);
+    --text-primary:#f3ead8; --text-secondary:#c8bca5; --text-muted:#8f8470;
+    --accent-gold:#d7ac61; --accent-red:#d26557; --accent-green:#67bf81;
+    --accent-blue:#79a4da; --accent-ember:#d88a57; --border-color:rgba(203,173,118,0.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100vh;}
+  body{color:var(--text-primary);letter-spacing:-0.01em;
+    font-family:"Noto Sans KR","Segoe UI",sans-serif;
+    background:
+      radial-gradient(circle at top,rgba(215,172,97,0.10),transparent 36%),
+      radial-gradient(circle at bottom right,rgba(53,94,166,0.10),transparent 30%),
+      linear-gradient(180deg,#0b0f17 0%,#090b10 55%,#06080d 100%);
+    background-attachment:fixed;
+    display:flex;align-items:center;justify-content:center;padding:2rem 1.25rem;}
+  .wrap{width:min(880px,100%);display:flex;flex-direction:column;gap:1rem;}
+
+  .head{display:flex;flex-direction:column;gap:.25rem;}
+  .kick{font-size:.6rem;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin:0;}
+  .title{margin:0;font-family:Georgia,serif;color:var(--accent-gold);font-weight:600;font-size:1.5rem;}
+  .lede{margin:.1rem 0 0;font-size:.82rem;line-height:1.6;color:var(--text-secondary);max-width:60ch;}
+  .lede b{color:var(--accent-green);font-weight:600;}
+
+  .panel{border:1px solid var(--border-color);border-radius:1.2rem;
+    background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)),var(--bg-card);
+    box-shadow:0 22px 50px rgba(0,0,0,0.35);}
+
+  /* ===== HUD (PartyHud 그대로) ===== */
+  .hud{display:flex;align-items:stretch;gap:12px;padding:12px 15px;position:relative;}
+  .hud-meta{flex:none;display:flex;flex-direction:column;justify-content:center;gap:.3rem;padding-right:13px;
+    border-right:1px solid rgba(255,255,255,0.08);min-width:118px;}
+  .hud-name{font-family:Georgia,serif;color:var(--accent-gold);font-size:.95rem;font-weight:600;}
+  .hud-tags{display:flex;gap:.35rem;flex-wrap:wrap;}
+  .hud-tag{font-size:.6rem;color:var(--text-secondary);background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.06);border-radius:999px;padding:.12rem .42rem;}
+  .hud-stars{font-size:.68rem;color:var(--accent-gold);letter-spacing:.1em;}
+  .hud-chips{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;min-width:0;}
+
+  .chip{display:flex;align-items:center;gap:.6rem;border:1px solid rgba(255,255,255,0.07);background:rgba(0,0,0,0.14);border-radius:.9rem;padding:.55rem .65rem;min-width:0;}
+  .chip .av{flex:none;width:2.2rem;height:2.2rem;border-radius:.65rem;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.08);}
+  .chip-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:.26rem;}
+  .chip-top{display:flex;align-items:baseline;justify-content:space-between;gap:.4rem;}
+  .chip-nm{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip-role{font-size:.54rem;letter-spacing:.14em;text-transform:uppercase;flex:none;}
+  .chip-hp{display:flex;align-items:center;gap:.4rem;}
+  .chip-hp-lbl{font-size:.52rem;font-weight:700;letter-spacing:.1em;color:var(--accent-red);}
+  .hp-bar{display:block;height:.4rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;flex:1;}
+  .hp-bar-fill{display:block;height:100%;border-radius:999px;transition:width .5s cubic-bezier(.4,0,.2,1);}
+  .hp-high{background:linear-gradient(90deg,#5cbf7d,#9fe59a);}
+  .hp-mid{background:linear-gradient(90deg,#c78d47,#f1d172);}
+  .hp-low{background:linear-gradient(90deg,#c25648,#ef7d6c);}
+  .chip-hp-v{font-size:.58rem;color:var(--text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .chip-meta{display:flex;align-items:center;justify-content:space-between;gap:.5rem;}
+  .chip-stats{font-size:.58rem;color:var(--text-muted);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .chip-skill{font-size:.56rem;color:var(--accent-gold);opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:7.5rem;font-variant-numeric:tabular-nums;}
+  .chip-skill.skill-flash{animation:skillFlash .62s ease-out;}
+  @keyframes skillFlash{0%{color:var(--accent-gold);}28%{color:#c8dcff;text-shadow:0 0 9px rgba(121,164,218,.8);}100%{color:var(--accent-gold);text-shadow:none;}}
+
+  /* ===== 인벤토리 (사용 트리거) ===== */
+  .bag{padding:1rem 1.1rem 1.1rem;}
+  .bag-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;}
+  .bag-title{margin:.1rem 0 0;font-weight:600;font-size:1rem;color:var(--text-primary);}
+  .summary{font-size:.7rem;color:var(--text-secondary);font-variant-numeric:tabular-nums;min-height:1rem;
+    transition:opacity .2s;}
+  .summary b{color:var(--accent-green);font-weight:600;}
+  .items{margin-top:.85rem;display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;}
+  .item{display:flex;flex-direction:column;gap:.5rem;text-align:left;cursor:pointer;font-family:inherit;color:inherit;
+    border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.16);border-radius:.9rem;padding:.7rem .8rem;
+    transition:transform .14s ease,border-color .14s ease,background .14s ease;}
+  .item:hover:not(:disabled){transform:translateY(-1px);border-color:rgba(103,191,129,0.4);background:rgba(0,0,0,0.24);}
+  .item:disabled{opacity:.4;cursor:not-allowed;}
+  .item-top{display:flex;align-items:center;justify-content:space-between;gap:.5rem;}
+  .item-nm{font-size:.82rem;font-weight:600;color:var(--text-primary);}
+  .item-ct{font-family:"JetBrains Mono",monospace;font-size:.62rem;color:var(--text-muted);}
+  .item-desc{font-size:.66rem;color:var(--text-muted);}
+  .item-foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.1rem;}
+  .item-tgt{font-size:.62rem;color:var(--text-secondary);}
+  .item-tgt b{color:var(--accent-green);font-weight:600;}
+  .item-use{font-size:.66rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-green);}
+  .item:disabled .item-use{color:var(--text-muted);}
+
+  .bag-foot{margin-top:.9rem;display:flex;gap:.5rem;align-items:center;}
+  .mini-btn{font-family:inherit;font-size:.72rem;font-weight:600;color:var(--text-secondary);cursor:pointer;
+    border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);border-radius:.7rem;padding:.5rem .85rem;}
+  .mini-btn:hover{border-color:rgba(215,172,97,0.4);color:var(--text-primary);}
+  .hint{font-size:.62rem;color:var(--text-muted);margin-left:auto;}
+  .hint kbd{font-family:"JetBrains Mono",monospace;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:.3rem;padding:.05rem .3rem;font-size:.6rem;}
+
+  @media(max-width:620px){
+    body{padding:1rem .8rem;}
+    .hud{flex-direction:column;}
+    .hud-meta{flex-direction:row;align-items:center;flex-wrap:wrap;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);padding:0 0 .6rem;}
+    .hud-chips{grid-template-columns:1fr;}
+    .items{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <p class="kick">FX 시안 · Item → Status Change</p>
+    <h1 class="title">아이템 사용 — 상태 변화 이펙트</h1>
+    <p class="lede">아이템을 쓰면 대상 캐릭터 칩에 <b>빛 입자가 피어오르며</b> HP 바가 차오릅니다. 은은하고 빠른 0.6초 연출 — 전투 공격 FX와 충돌하지 않게 절제했습니다. 아래 아이템을 눌러 확인하세요.</p>
+  </div>
+
+  <!-- PARTY HUD -->
+  <div class="panel hud">
+    <div class="hud-meta">
+      <span class="hud-name">파티 상태</span>
+      <div class="hud-tags"><span class="hud-tag">2️⃣ 층</span><span class="hud-tag">📍 F6·E</span></div>
+      <span class="hud-stars">★ ★★★</span>
+    </div>
+    <div class="hud-chips" id="chips"></div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="panel bag">
+    <div class="bag-head">
+      <div>
+        <p class="kick">Inventory</p>
+        <h2 class="bag-title">인벤토리</h2>
+      </div>
+      <span class="summary" id="summary">아이템을 사용해 보세요.</span>
+    </div>
+    <div class="items" id="items"></div>
+    <div class="bag-foot">
+      <button class="mini-btn" id="resetBtn">↺ 리셋</button>
+      <span class="hint">단축키 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 사용 · <kbd>R</kbd> 리셋</span>
+    </div>
+  </div>
+</div>
+
+<script src="heal-fx.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const INITIAL = [
+    { name:"아르곤", role:"전사",   roleColor:"var(--accent-gold)",  av:"⚔️", stats:"💪4 · 🏃1 · 💡0", maxHp:10, hp:4, skill:{name:"강타", cur:1, max:3} },
+    { name:"피나",   role:"도적",   roleColor:"var(--accent-ember)", av:"🗡️", stats:"💪1 · 🏃4 · 💡1", maxHp:10, hp:7, skill:{name:"암습", cur:0, max:1} },
+    { name:"미나",   role:"마법사", roleColor:"var(--accent-blue)",  av:"🔮", stats:"💪0 · 🏃1 · 💡4", maxHp:10, hp:6, skill:{name:"속박", cur:0, max:3} },
+  ];
+  let members = structuredClone(INITIAL);
+
+  const ITEMS = [
+    { id:"potion", name:"회복물약", desc:"HP +5",       kind:"heal",    value:5, count:2 },
+    { id:"elixir", name:"비약",     desc:"전체 HP +4",  kind:"allheal", value:4, count:1 },
+    { id:"mana",   name:"마나 물약", desc:"특수액션 +1", kind:"action",  value:1, count:2 },
+  ];
+  let items = structuredClone(ITEMS);
+
+  const chipsEl = document.getElementById("chips");
+  const itemsEl = document.getElementById("items");
+  const summaryEl = document.getElementById("summary");
+
+  const hpClass = p => p>60?"hp-high":p>30?"hp-mid":"hp-low";
+  const alive = m => m.hp > 0;
+  const actDeficit = m => Math.max(0, m.skill.max - m.skill.cur);
+
+  // ── 대상 선정 (item-usage.ts 로직과 동일) ──
+  function hpTarget(){
+    let idx=-1, low=Infinity;
+    members.forEach((m,i)=>{ if(!alive(m)||m.hp>=m.maxHp) return; const r=m.hp/m.maxHp; if(r<low){low=r;idx=i;} });
+    return idx;
+  }
+  function manaTarget(){
+    let idx=-1, big=0;
+    members.forEach((m,i)=>{ if(!alive(m)) return; const d=actDeficit(m); if(d>big){big=d;idx=i;} });
+    return idx;
+  }
+  function allTargets(){
+    return members.map((m,i)=>({m,i})).filter(({m})=>alive(m)&&m.hp<m.maxHp).map(({i})=>i);
+  }
+  function itemTarget(it){
+    if(it.kind==="heal") return hpTarget();
+    if(it.kind==="action") return manaTarget();
+    if(it.kind==="allheal") return allTargets().length?"all":-1;
+    return -1;
+  }
+  function usable(it){
+    if(it.count<=0) return false;
+    const t=itemTarget(it);
+    return t==="all" ? true : t>=0;
+  }
+
+  // ── 칩 DOM (한 번만 생성, 이후 in-place 갱신) ──
+  const refs = [];
+  function buildChips(){
+    chipsEl.innerHTML="";
+    refs.length=0;
+    members.forEach((m,i)=>{
+      const pct=Math.max(0,m.hp/m.maxHp*100);
+      const chip=document.createElement("div");
+      chip.className="chip";
+      chip.innerHTML=`
+        <span class="av">${m.av}</span>
+        <div class="chip-body">
+          <div class="chip-top"><span class="chip-nm">${m.name}</span><span class="chip-role" style="color:${m.roleColor}">${m.role}</span></div>
+          <div class="chip-hp"><span class="chip-hp-lbl">HP</span>
+            <span class="hp-bar"><span class="hp-bar-fill ${hpClass(pct)}" style="width:${pct}%"></span></span>
+            <span class="chip-hp-v">${m.hp}/${m.maxHp}</span></div>
+          <div class="chip-meta"><span class="chip-stats">${m.stats}</span><span class="chip-skill">${m.skill.name} ${m.skill.cur}/${m.skill.max}</span></div>
+        </div>`;
+      chipsEl.appendChild(chip);
+      refs.push({
+        chip,
+        fill: chip.querySelector(".hp-bar-fill"),
+        hpv:  chip.querySelector(".chip-hp-v"),
+        skill:chip.querySelector(".chip-skill"),
+        fx: HealFX.create({ chip }),
+      });
+    });
+  }
+  function paintHp(i){
+    const m=members[i], r=refs[i], pct=Math.max(0,m.hp/m.maxHp*100);
+    r.fill.className="hp-bar-fill "+hpClass(pct);
+    r.fill.style.width=pct+"%";
+    r.hpv.textContent=`${m.hp}/${m.maxHp}`;
+  }
+  function paintSkill(i){
+    const m=members[i], r=refs[i];
+    r.skill.textContent=`${m.skill.name} ${m.skill.cur}/${m.skill.max}`;
+    r.skill.classList.remove("skill-flash"); void r.skill.offsetWidth; r.skill.classList.add("skill-flash");
+  }
+
+  function setSummary(html){ summaryEl.innerHTML=html; }
+
+  // ── 사용 (추천 대상에 자동 적용) ──
+  function use(it){
+    if(!usable(it)) return;
+
+    if(it.kind==="heal"){
+      const i=hpTarget(); if(i<0) return;
+      const m=members[i], before=m.hp;
+      m.hp=Math.min(m.maxHp, m.hp+it.value);
+      const gained=m.hp-before;
+      paintHp(i);
+      refs[i].fx.play("heal", { label:"+"+gained, bars:[refs[i].fill] });
+      setSummary(`<b>${m.name}</b> — ${it.name} 사용 · HP +${gained}`);
+    }
+    else if(it.kind==="allheal"){
+      const targets=allTargets(), names=[];
+      targets.forEach(i=>{
+        const m=members[i], before=m.hp;
+        m.hp=Math.min(m.maxHp, m.hp+it.value);
+        paintHp(i);
+        refs[i].fx.play("allheal", { label:"+"+(m.hp-before), bars:[refs[i].fill] });
+        names.push(m.name);
+      });
+      setSummary(`<b>전원</b> — ${it.name} 사용 · HP +${it.value} (${names.join("·")})`);
+    }
+    else if(it.kind==="action"){
+      const i=manaTarget(); if(i<0) return;
+      const m=members[i], before=m.skill.cur;
+      m.skill.cur=Math.min(m.skill.max, m.skill.cur+it.value);
+      const gained=m.skill.cur-before;
+      paintSkill(i);
+      refs[i].fx.play("action", { label:`특수액션 +${gained}` });
+      setSummary(`<b>${m.name}</b> — ${it.name} 사용 · ${m.skill.name} +${gained}`);
+    }
+
+    it.count-=1;
+    paintItems();
+  }
+
+  // ── 인벤토리 버튼 ──
+  function targetLabel(it){
+    const t=itemTarget(it);
+    if(t==="all") return "전원";
+    if(t<0) return "—";
+    return members[t].name;
+  }
+  function paintItems(){
+    itemsEl.innerHTML="";
+    items.forEach((it)=>{
+      const ok=usable(it);
+      const b=document.createElement("button");
+      b.className="item"; b.disabled=!ok;
+      b.innerHTML=`
+        <div class="item-top"><span class="item-nm">${it.name}</span><span class="item-ct">×${it.count}</span></div>
+        <div class="item-desc">${it.desc}</div>
+        <div class="item-foot"><span class="item-tgt">${ok?`대상 <b>${targetLabel(it)}</b>`:"—"}</span><span class="item-use">사용</span></div>`;
+      b.addEventListener("click",()=>use(it));
+      itemsEl.appendChild(b);
+    });
+  }
+
+  function reset(){
+    members=structuredClone(INITIAL);
+    items=structuredClone(ITEMS);
+    buildChips();
+    paintItems();
+    setSummary("아이템을 사용해 보세요.");
+  }
+
+  document.getElementById("resetBtn").addEventListener("click", reset);
+  document.addEventListener("keydown", e=>{
+    if(e.key==="r"||e.key==="R"){ reset(); return; }
+    const i=["1","2","3"].indexOf(e.key);
+    if(i>=0 && items[i]) use(items[i]);
+  });
+
+  buildChips();
+  paintItems();
+})();
+</script>
+</body>
+</html>

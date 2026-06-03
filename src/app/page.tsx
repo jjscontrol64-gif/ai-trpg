@@ -13,6 +13,7 @@ import {
   DiceRollResult,
   GameResponse,
   GameState,
+  HealFxEvent,
   PlayerAction,
   StatusWindowData,
   StoryBeat,
@@ -171,6 +172,45 @@ function didUseItemChangeState(previous: GameState, next: GameState): boolean {
   });
 }
 
+function createHealFxEvent(
+  previous: GameState,
+  next: GameState,
+  isAllHeal: boolean
+): HealFxEvent | null {
+  const targets: HealFxEvent["targets"] = [];
+
+  previous.party.members.forEach((member, memberIndex) => {
+    const nextMember = next.party.members[memberIndex];
+    if (!nextMember) return;
+
+    const hpGain = nextMember.hp - member.hp;
+    if (hpGain > 0) {
+      targets.push({
+        index: memberIndex,
+        kind: isAllHeal ? "allheal" : "heal",
+        amount: hpGain,
+      });
+      return;
+    }
+
+    const actionGain = nextMember.actions.reduce((sum, action, actionIndex) => {
+      const previousRemaining =
+        member.actions[actionIndex]?.remaining ?? action.remaining;
+      return sum + Math.max(0, action.remaining - previousRemaining);
+    }, 0);
+
+    if (actionGain > 0) {
+      targets.push({
+        index: memberIndex,
+        kind: "action",
+        amount: actionGain,
+      });
+    }
+  });
+
+  return targets.length ? { id: createId(), targets } : null;
+}
+
 function createSaveFileName(playerName: string): string {
   const safePlayerName = playerName
     .trim()
@@ -294,6 +334,7 @@ export default function HomePage() {
   const [inspirationArmed, setInspirationArmed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [attackFxEvent, setAttackFxEvent] = useState<AttackFxEvent | null>(null);
+  const [healFxEvent, setHealFxEvent] = useState<HealFxEvent | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -325,6 +366,7 @@ export default function HomePage() {
       setPreviousSnapshot(null);
       setInspirationArmed(false);
       setAttackFxEvent(null);
+      setHealFxEvent(null);
     });
 
     return () => {
@@ -386,6 +428,7 @@ export default function HomePage() {
         setPreviousSnapshot(null);
         setInspirationArmed(false);
         setAttackFxEvent(null);
+        setHealFxEvent(null);
         setBeats([
           {
             id: createId(),
@@ -425,6 +468,7 @@ export default function HomePage() {
         setBeats(savedSnapshot.beats);
         setInspirationArmed(false);
         setAttackFxEvent(null);
+        setHealFxEvent(null);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "API key setup failed.");
       }
@@ -569,6 +613,7 @@ export default function HomePage() {
         setChoiceSubmitStatus("idle");
         setLastSubmittedChoice(null);
         setAttackFxEvent(nextAttackFxEvent);
+        setHealFxEvent(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -593,6 +638,7 @@ export default function HomePage() {
       handleChoice(choice);
       return;
     }
+    const action = choice.action;
 
     setPreviousSnapshot(
       createGameSnapshot({
@@ -608,12 +654,25 @@ export default function HomePage() {
     setInspirationArmed(false);
 
     const normalizedGameState = normalizeGameState(gameState);
+    const usedItemByIndex =
+      action.inventoryIndex === undefined
+        ? undefined
+        : normalizedGameState.party.inventory[action.inventoryIndex];
+    const usedItem =
+      usedItemByIndex?.id === action.itemId
+        ? usedItemByIndex
+        : normalizedGameState.party.inventory.find(
+            (item) => item.id === action.itemId
+          );
+    const isAllHeal = Boolean(
+      usedItem?.allHpRestore || usedItem?.effectId === "restore_all_hp"
+    );
     const result = useItem(
       normalizedGameState,
       {
-        itemId: choice.action.itemId,
-        targetIndex: choice.action.targetIndex,
-        inventoryIndex: choice.action.inventoryIndex,
+        itemId: action.itemId,
+        targetIndex: action.targetIndex,
+        inventoryIndex: action.inventoryIndex,
       },
       {
         getNextActions: () => currentChoices.map((currentChoice) => currentChoice.action),
@@ -624,6 +683,7 @@ export default function HomePage() {
 
     if (!changed) {
       setError(result.eventSummary);
+      setHealFxEvent(null);
       setBeats((prev) => [
         ...prev,
         {
@@ -638,6 +698,7 @@ export default function HomePage() {
     setGameState(result.newState);
     setStatusWindow(buildStatusWindow(result.newState));
     setAttackFxEvent(null);
+    setHealFxEvent(createHealFxEvent(normalizedGameState, result.newState, isAllHeal));
     setBeats((prev) => [
       ...prev,
       {
@@ -673,6 +734,7 @@ export default function HomePage() {
         setCurrentChoices(response.choices);
         setChoiceSubmitStatus("idle");
         setAttackFxEvent(null);
+        setHealFxEvent(null);
         setBeats((prev) => [
           ...prev,
           {
@@ -703,6 +765,7 @@ export default function HomePage() {
     setPreviousSnapshot(null);
     setInspirationArmed(false);
     setAttackFxEvent(null);
+    setHealFxEvent(null);
     setError(null);
   };
 
@@ -717,6 +780,7 @@ export default function HomePage() {
     setInspirationArmed(false);
     setDrawerOpen(false);
     setAttackFxEvent(null);
+    setHealFxEvent(null);
     setError(null);
     setSaveStatus("idle");
     setImportStatus("idle");
@@ -780,7 +844,11 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <PartyHud status={statusWindow} onOpenDrawer={() => setDrawerOpen(true)} />
+      <PartyHud
+        status={statusWindow}
+        healFxEvent={healFxEvent}
+        onOpenDrawer={() => setDrawerOpen(true)}
+      />
 
       <div className="stage">
         <ScriptStage
