@@ -343,7 +343,7 @@ async function handleStartGame(
 
   const engineResult = {
     newState: state,
-    eventSummary: `${playerName}(전사), 피나(도적), 미나(마법사)가 던전 입구(1층 C6)에 도착했다. 어두운 미궁이 앞에 펼쳐져 있다.`,
+    eventSummary: `${playerName}(전사), 에이미(도적), 실루엘라(마법사)가 던전 입구(1층 C6)에 도착했다. 어두운 미궁이 앞에 펼쳐져 있다.`,
     nextActions: directions,
   };
 
@@ -688,12 +688,12 @@ async function getEndingNarration(
   const systemPrompt = type === "victory"
     ? `당신은 TRPG 게임 마스터입니다. 정복 엔딩을 연출하세요.
 레드드래곤을 물리친 후, 시점이 TRPG 테이블로 전환됩니다.
-피나와 미나가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
-동료 호감도는 피나 ${affinity.pina}단계, 미나 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
+에이미와 실루엘라가 환호성을 지르고, 간식을 먹으며 오늘 세션의 하이라이트를 떠드는 장면으로 마무리하세요.
+동료 호감도는 에이미 ${affinity.pina}단계, 실루엘라 ${affinity.mina}단계입니다. 높은 호감도는 동료 유대의 따뜻한 뉘앙스로만 반영하세요.
 고풍스러운 판타지 문체에서 현실의 따뜻한 톤으로 자연스럽게 전환하세요.`
     : `당신은 TRPG 게임 마스터입니다. 패배 엔딩을 연출하세요.
 파티가 전멸했습니다. 시점이 TRPG 테이블로 전환됩니다.
-세션을 마친 피나·미나가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
+세션을 마친 에이미·실루엘라가 후기를 나누며 훈훈하게 마무리하는 장면을 그려주세요.
 패배는 부정적 종결이 아닌 TRPG 경험의 일부임을 느끼게 해주세요.`;
 
   const aiProvider = createAIProvider(resolvedAIModel.provider);
@@ -717,23 +717,23 @@ function buildEndingChoices(state: GameState): ChoiceOption[] {
 
   if (affinity.pina >= 3) {
     choices.push({
-      label: "🗡️ 피나 — 약속의 후일담",
-      text: "피나와 오늘 모험 뒤의 약속을 나눈다.",
+      label: "🗡️ 에이미 — 약속의 후일담",
+      text: "에이미와 오늘 모험 뒤의 약속을 나눈다.",
       action: { type: "ending_choice", choiceId: "pina_promise" },
     });
   }
 
   if (affinity.mina >= 3) {
     choices.push({
-      label: "🔮 미나 — 조용한 후일담",
-      text: "미나와 세션이 남긴 의미를 차분히 되짚는다.",
+      label: "🔮 실루엘라 — 조용한 후일담",
+      text: "실루엘라와 세션이 남긴 의미를 차분히 되짚는다.",
       action: { type: "ending_choice", choiceId: "mina_reflection" },
     });
   }
 
   choices.push({
     label: "🎲 모두 — 세션 마무리",
-    text: "피나와 미나와 함께 오늘의 세션을 따뜻하게 마무리한다.",
+    text: "에이미와 실루엘라와 함께 오늘의 세션을 따뜻하게 마무리한다.",
     action: { type: "ending_choice", choiceId: "shared_table" },
   });
 
@@ -748,16 +748,16 @@ async function getEndingChoiceNarration(
 ): Promise<string> {
   const focus = {
     pina_promise:
-      "피나가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
+      "에이미가 활기찬 말투로 다음 모험의 약속을 꺼내고, 플레이어와 쌓은 신뢰가 동료 유대로 드러나는 후일담",
     mina_reflection:
-      "미나가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
+      "실루엘라가 차분한 존댓말로 오늘 세션의 의미를 정리하고, 플레이어에게 조용한 신뢰를 표현하는 후일담",
     shared_table:
-      "피나와 미나가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
+      "에이미와 실루엘라가 함께 오늘의 하이라이트를 되짚으며 테이블을 정리하는 공통 후일담",
   }[choiceId] ?? "파티가 함께 정복 세션을 마무리하는 공통 후일담";
 
   const systemPrompt = `당신은 TRPG 게임 마스터입니다. 정복 엔딩 이후의 짧은 후일담 에필로그를 작성하세요.
 선택된 후일담: ${focus}.
-동료 호감도는 피나 ${state.party.affinity.pina}단계, 미나 ${state.party.affinity.mina}단계입니다.
+동료 호감도는 에이미 ${state.party.affinity.pina}단계, 실루엘라 ${state.party.affinity.mina}단계입니다.
 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고, 과한 연애 묘사는 피하세요.
 텍스트만 반환하세요. JSON은 반환하지 마세요.`;
 

@@ -9,7 +9,7 @@ const SEATS = [
   { key: "mina", img: "/images/characters/mina.png", pos: "46% 14%" },
 ] as const;
 
-const FALLBACK_NAMES = ["레온", "피나", "미나"];
+const FALLBACK_NAMES = ["레온", "에이미", "실루엘라"];
 
 const LINE_TEMPLATES = [
   "{name}이(가) 검 끝을 고쳐 쥐며 다음 수를 가늠합니다.",

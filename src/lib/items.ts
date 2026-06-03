@@ -6,10 +6,10 @@ import {
   getRandomConsumableDefinition,
   getRandomEquipDefinition,
 } from "./registry/game-registry";
+import { createItemInstanceId } from "./item-id";
 
-let itemCounter = 0;
 function nextId(): string {
-  return `item_${++itemCounter}`;
+  return createItemInstanceId();
 }
 
 export function createEquip(
@@ -104,10 +104,6 @@ function createConsumableById(id: string): ConsumableItem {
 
 export function healPotion(): ConsumableItem {
   return createConsumableById("heal-potion");
-}
-
-export function smokeBomb(): ConsumableItem {
-  return createConsumableById("smoke-bomb");
 }
 
 export function superiorHealPotion(): ConsumableItem {

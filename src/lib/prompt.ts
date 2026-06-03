@@ -55,13 +55,13 @@ export function buildSystemPrompt(state: GameState): string {
 
 ## 등장 캐릭터
 - 전사 "${warrior.name}" (플레이어): 용맹한 전사. 파티의 리더.
-- 피나 (도적): 수다스럽고 활기찬 분위기메이커. 오렌지빛 단발, 푸른 눈. ENFP. 말투: 밝고 경쾌, 반말.
-- 미나 (마법사): 이지적이고 침착한 마법사. 긴 은발, 푸른 눈. INTJ. 말투: 차분하고 논리적, 존댓말.
+- 에이미 (도적): 수다스럽고 활기찬 분위기메이커. 오렌지빛 단발, 푸른 눈. ENFP. 말투: 밝고 경쾌, 반말.
+- 실루엘라 (마법사): 이지적이고 침착한 마법사. 긴 은발, 푸른 눈. INTJ. 말투: 차분하고 논리적, 존댓말.
 - 린린 (NPC, 마법사): 소심하고 예의바른 성격. 보랏빛 장발, 보랏빛 눈동자, 마녀 모자와 로브 차림. ISFJ. 말투: 조심스럽고 공손한 존댓말. 2층 특정 지점에서만 일회성으로 등장하는 NPC이므로, 린린과 만나는 상황에서만 묘사·등장시키세요.
 
 ## 문체 지침
 - 환경 묘사는 생생하고 감각적으로.
-- 피나와 미나는 상황에 맞게 자연스럽게 대화에 참여시키세요.
+- 에이미와 실루엘라는 상황에 맞게 자연스럽게 대화에 참여시키세요.
 - 전투 시 긴박감 있게, 탐험 시 신비롭게.
 - 다이스 판정 결과에 맞는 극적인 묘사를 하세요.
 
@@ -75,21 +75,21 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
 
 ## 파티 상태
 - ${warrior.name} (전사): HP ${warrior.hp}/${warrior.maxHp}
-- 피나 (도적): HP ${pina.hp}/${pina.maxHp}
-- 미나 (마법사): HP ${mina.hp}/${mina.maxHp}
+- 에이미 (도적): HP ${pina.hp}/${pina.maxHp}
+- 실루엘라 (마법사): HP ${mina.hp}/${mina.maxHp}
 
 ## 동료 호감도 (0~3단계)
-- 피나: ${affinity.pina}단계 — ${AFFINITY_MOOD[affinity.pina]}
-- 미나: ${affinity.mina}단계 — ${AFFINITY_MOOD[affinity.mina]}
+- 에이미: ${affinity.pina}단계 — ${AFFINITY_MOOD[affinity.pina]}
+- 실루엘라: ${affinity.mina}단계 — ${AFFINITY_MOOD[affinity.mina]}
 - 호감도가 높은 동료일수록 플레이어에게 더 친밀하고 마음을 여는 말투로 대화에 참여시키세요.
 - 단, 세계관 톤은 클래식 왕도 JRPG 풍의 동료 유대로 유지하고 과한 연애 묘사는 피하세요.
 - "대화하기"는 상태 변화 없는 일반 대화입니다. "안전지대 호감도 대화"는 엔진이 호감도를 올리는 별도 이벤트입니다.
 
 ## 응답 규칙
-1. narration: 내레이션 텍스트. 피나·미나의 대사를 자연스럽게 포함.
+1. narration: 내레이션 텍스트. 에이미·실루엘라의 대사를 자연스럽게 포함.
 2. choices: 정확히 3개의 선택지를 생성. 각 선택지는 actionIndex(아래 가능한 행동의 actionIndex 숫자), label(짧은 키워드), text(시도 묘사문)를 포함.
-3. 가능한 행동에는 수행 캐릭터와 능력치가 "이름(역할, 스탯 값)" 형태로 표시됩니다. 판정·전투 행동은 해당 능력치가 가장 높은 캐릭터를 우선 선택하세요. (예: 고대 문자 해독 등 지능 판정은 INT가 높은 미나, 힘 판정은 전사, 민첩 판정은 피나)
-4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 미나 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요. 단, "휴식하고 길을 나선다"처럼 특정 캐릭터가 수행하지 않는 선택지는 명령형 라벨로 작성해도 됩니다.
+3. 가능한 행동에는 수행 캐릭터와 능력치가 "이름(역할, 스탯 값)" 형태로 표시됩니다. 판정·전투 행동은 해당 능력치가 가장 높은 캐릭터를 우선 선택하세요. (예: 고대 문자 해독 등 지능 판정은 INT가 높은 실루엘라, 힘 판정은 전사, 민첩 판정은 에이미)
+4. label에는 수행하는 캐릭터의 이름을 반드시 포함하고(예: "📖 실루엘라 — 문자 해독"), text는 그 캐릭터가 행동하는 모습을 묘사하세요. 단, "휴식하고 길을 나선다"처럼 특정 캐릭터가 수행하지 않는 선택지는 명령형 라벨로 작성해도 됩니다.
 5. label 앞의 이모지는 매 선택지마다 그 행동의 성격에 어울리는 것을 골라 붙이세요. 아래 예시의 🧭/⚔️/🛡️는 형식 참고일 뿐이니 그대로 고정해 반복하지 마세요.
 6. 선택지는 제공된 가능한 행동 목록에 대응해야 하며, actionIndex는 반드시 선택한 행동의 값을 그대로 사용하세요.
 7. JSON 형식으로만 응답하세요.
@@ -99,8 +99,8 @@ ${state.combat.monster ? `- 몬스터: ${state.combat.monster.name} (HP: ${state
   "narration": "내레이션 텍스트",
   "choices": [
     { "actionIndex": 0, "label": "🧭 ${warrior.name} — 선택지 키워드", "text": "시도 묘사문" },
-    { "actionIndex": 1, "label": "⚔️ 피나 — 선택지 키워드", "text": "시도 묘사문" },
-    { "actionIndex": 2, "label": "🛡️ 미나 — 선택지 키워드", "text": "시도 묘사문" }
+    { "actionIndex": 1, "label": "⚔️ 에이미 — 선택지 키워드", "text": "시도 묘사문" },
+    { "actionIndex": 2, "label": "🛡️ 실루엘라 — 선택지 키워드", "text": "시도 묘사문" }
   ]
 }`;
 }
@@ -139,7 +139,7 @@ export function buildUserMessage(
 
   if (options.affinityTalk) {
     const { target } = options.affinityTalk;
-    const targetName = target === "pina" ? "피나" : "미나";
+    const targetName = target === "pina" ? "에이미" : "실루엘라";
     const tier = normalizeAffinity(engineResult.newState.party.affinity)[target];
     const capped = tier >= 3;
 
@@ -152,7 +152,7 @@ export function buildUserMessage(
     msg += `\n- 전투·판정·자원 변화·몬스터 행동은 일어나지 않습니다. 대화 그 자체에 무게를 두세요.`;
     msg += `\n- 나레이션의 무게중심은 대화에 두되, 이어서 플레이어가 움직일 수 있도록 가능한 행동(이동 등)으로 3개의 선택지를 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 값을 그대로 넣으세요.`;
   } else if (options.talkBiased) {
-    msg += `\n이번 응답은 플레이어가 동료들과 대화하며 다음 행동을 다시 고르는 장면입니다. 상태 변화, 다이스 판정, 자원 소모, 몬스터 행동은 일어나지 않습니다. 피나와 미나의 대화를 중심으로 짧게 묘사하고, 가능한 행동 중 탐색 스킬(패스파인딩, 연금생성)이 있으면 선택지에 최소 1개 포함하세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요.`;
+    msg += `\n이번 응답은 플레이어가 동료들과 대화하며 다음 행동을 다시 고르는 장면입니다. 상태 변화, 다이스 판정, 자원 소모, 몬스터 행동은 일어나지 않습니다. 에이미와 실루엘라의 대화를 중심으로 짧게 묘사하고, 가능한 행동 중 탐색 스킬(패스파인딩, 연금생성)이 있으면 선택지에 최소 1개 포함하세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요.`;
   } else {
     msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
   }
@@ -184,7 +184,7 @@ function describeAction(action: PlayerAction, members: Character[]): string {
     case "special_action":
       return `${action.actionName} 사용 — ${members[action.characterIndex].name}`;
     case "flee":
-      return action.useSmokeBomb ? "연막탄으로 도주" : "도주 시도";
+      return "도주 시도";
     case "use_item":
       return `아이템 사용 (${action.itemId})`;
     case "rest":
@@ -202,13 +202,13 @@ function describeAction(action: PlayerAction, members: Character[]): string {
     case "npc_interact":
       return "린린과 대화";
     case "pathfinding":
-      return "패스파인딩 — 피나";
+      return "패스파인딩 — 에이미";
     case "alchemy":
-      return "연금생성 — 미나";
+      return "연금생성 — 실루엘라";
     case "affinity_talk":
       return action.target === "pina"
-        ? "안전지대 호감도 대화 — 피나와 대화하고 피나의 호감도 +1(최대 3)"
-        : "안전지대 호감도 대화 — 미나와 대화하고 미나의 호감도 +1(최대 3)";
+        ? "안전지대 호감도 대화 — 에이미와 대화하고 에이미의 호감도 +1(최대 3)"
+        : "안전지대 호감도 대화 — 실루엘라와 대화하고 실루엘라의 호감도 +1(최대 3)";
     case "leave_safe_room":
       return "안전지대 떠나기 — 호감도 변화 없이 휴식을 마치고 이동 선택으로 복귀";
     case "ending_choice":

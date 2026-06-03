@@ -15,7 +15,7 @@ const puzzleActions: PlayerAction[] = [
 describe("mapChoicesToActions", () => {
   it("uses the model-provided actionIndex instead of the choice order", () => {
     const [choice] = mapChoicesToActions(
-      [{ actionIndex: 5, label: "피나 민첩", text: "피나가 재빠르게 장치를 살핀다" }],
+      [{ actionIndex: 5, label: "에이미 민첩", text: "에이미가 재빠르게 장치를 살핀다" }],
       puzzleActions
     );
 
@@ -28,7 +28,7 @@ describe("mapChoicesToActions", () => {
 
   it("accepts numeric string actionIndex values from model JSON", () => {
     const [choice] = mapChoicesToActions(
-      [{ actionIndex: "5", label: "피나 민첩", text: "피나가 재빠르게 장치를 살핀다" }],
+      [{ actionIndex: "5", label: "에이미 민첩", text: "에이미가 재빠르게 장치를 살핀다" }],
       puzzleActions
     );
 

@@ -15,8 +15,6 @@ function isActionRestoreItem(item: ConsumableItem): boolean {
 }
 
 export function isBagUsable(item: ConsumableItem): boolean {
-  if (item.autoFlee || item.effectId === "auto_flee") return false;
-
   return Boolean(
     item.effectId ||
       item.hpRestore ||

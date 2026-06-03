@@ -259,13 +259,13 @@ export function processSpecialAction(
       }
       playerDamage = getAttackDamage(diceResult.judgment, diceResult.stat);
       monster.hp = Math.max(0, monster.hp - playerDamage);
-      eventLog = `암습! 피나가 그림자에서 공격. ${playerDamage} 데미지. 몬스터 반격 회피.`;
+      eventLog = `암습! 에이미가 그림자에서 공격. ${playerDamage} 데미지. 몬스터 반격 회피.`;
       break;
     }
     case "마력속박": {
       // 몬스터 2턴 행동불능
       monster.statusEffect = { type: "bind", remaining: 2 };
-      eventLog = `마력속박! 미나가 ${monster.name}을(를) 2턴간 속박.`;
+      eventLog = `마력속박! 실루엘라가 ${monster.name}을(를) 2턴간 속박.`;
       break;
     }
   }
@@ -292,27 +292,9 @@ export function processSpecialAction(
   };
 }
 
-export function processFlee(state: GameState, useSmokeBomb: boolean): CombatTurnResult {
+export function processFlee(state: GameState): CombatTurnResult {
   const s = structuredClone(state);
   let eventLog = "";
-
-  if (useSmokeBomb) {
-    const bombIdx = s.party.inventory.findIndex((i) => i.autoFlee);
-    if (bombIdx >= 0) {
-      s.party.inventory.splice(bombIdx, 1);
-      s.combat.active = false;
-      s.phase = "exploration";
-      eventLog = "연막탄 사용! 안전하게 후퇴.";
-      return {
-        state: s,
-        playerDamage: 0,
-        monsterDamage: 0,
-        monsterDefeated: false,
-        partyDefeated: false,
-        eventLog,
-      };
-    }
-  }
 
   const diceResult = performDiceCheck(s.party.members[0], "dex", false, s.mode, false);
   if (
@@ -357,10 +339,7 @@ export function getCombatActions(state: GameState): PlayerAction[] {
     }
   });
 
-  actions.push({ type: "flee", useSmokeBomb: false });
-  if (state.party.inventory.some((i) => i.autoFlee)) {
-    actions.push({ type: "flee", useSmokeBomb: true });
-  }
+  actions.push({ type: "flee" });
 
   const usableItems = state.party.inventory.filter(isBagUsable);
   for (const item of usableItems) {

@@ -7,11 +7,10 @@ import {
   monsterDefinitions,
   roomDefinitions,
 } from "./generated";
-
-let itemCounter = 0;
+import { createItemInstanceId } from "../item-id";
 
 function nextId(): string {
-  return `item_${++itemCounter}`;
+  return createItemInstanceId();
 }
 
 export const roomTypeEmoji = Object.fromEntries(
@@ -59,7 +58,6 @@ export function createConsumableFromDefinition(
     hpRestore: definition.hpRestore,
     allHpRestore: definition.allHpRestore,
     actionRestore: definition.actionRestore,
-    autoFlee: definition.autoFlee,
   };
 }
 

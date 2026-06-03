@@ -17,4 +17,80 @@ describe("normalizeGameState", () => {
 
     expect(normalized.party.affinity).toEqual({ pina: 0, mina: 0 });
   });
+
+  it("backfills missing consumable effects for older saves", () => {
+    const state = createInitialState("아르곤");
+    state.party.inventory = [
+      {
+        id: "item_legacy_1",
+        name: "회복물약",
+        rarity: "common",
+      },
+    ];
+
+    const normalized = normalizeGameState(state);
+
+    expect(normalized.party.inventory[0]).toMatchObject({
+      id: "item_legacy_1",
+      name: "회복물약",
+      effectId: "restore_hp",
+      effectValue: 3,
+      hpRestore: 3,
+    });
+  });
+
+  it("normalizes legacy mana potion names with spaces", () => {
+    const state = createInitialState("아르곤");
+    state.party.inventory = [
+      {
+        id: "item_legacy_mana",
+        name: "마나 물약",
+        rarity: "rare",
+      },
+    ];
+
+    const normalized = normalizeGameState(state);
+
+    expect(normalized.party.inventory[0]).toMatchObject({
+      id: "item_legacy_mana",
+      name: "마나물약",
+      effectId: "restore_action",
+      effectValue: 1,
+      actionRestore: 1,
+    });
+  });
+
+  it("reissues duplicate consumable instance ids from older saves", () => {
+    const state = createInitialState("아르곤");
+    state.party.inventory = [
+      {
+        id: "item_2",
+        name: "회복물약",
+        rarity: "common",
+        effectId: "restore_hp",
+        effectValue: 3,
+        hpRestore: 3,
+      },
+      {
+        id: "item_2",
+        name: "마나물약",
+        rarity: "rare",
+        effectId: "restore_action",
+        effectValue: 1,
+        actionRestore: 1,
+      },
+    ];
+
+    const normalized = normalizeGameState(state);
+
+    expect(normalized.party.inventory).toHaveLength(2);
+    expect(normalized.party.inventory[0].id).toBe("item_2");
+    expect(normalized.party.inventory[1].id).not.toBe("item_2");
+    expect(new Set(normalized.party.inventory.map((item) => item.id)).size).toBe(2);
+    expect(normalized.party.inventory[1]).toMatchObject({
+      name: "마나물약",
+      effectId: "restore_action",
+      actionRestore: 1,
+    });
+  });
 });

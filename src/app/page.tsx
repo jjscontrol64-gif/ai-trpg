@@ -26,6 +26,7 @@ import {
   SaveSnapshot,
 } from "@/lib/storage";
 import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
+import { useItem } from "@/lib/use-item";
 
 const storageProvider = createStorageProvider();
 const DEFAULT_SAVE_ID = "default";
@@ -138,6 +139,36 @@ async function getGameSessionStatus(): Promise<GameSessionStatus> {
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildItemUseLog(choice: ChoiceOption, state: GameState): string {
+  if (choice.action.type !== "use_item") return choice.label;
+  const action = choice.action;
+
+  const item =
+    action.inventoryIndex === undefined
+      ? state.party.inventory.find((entry) => entry.id === action.itemId)
+      : state.party.inventory[action.inventoryIndex];
+  const target =
+    action.targetIndex === undefined
+      ? null
+      : state.party.members[action.targetIndex];
+  const itemName = item?.name ?? choice.label;
+
+  return target ? `${itemName} '${target.name}'에게 사용` : `${itemName} 사용`;
+}
+
+function didUseItemChangeState(previous: GameState, next: GameState): boolean {
+  if (previous.party.inventory.length !== next.party.inventory.length) return true;
+
+  return previous.party.members.some((member, memberIndex) => {
+    const nextMember = next.party.members[memberIndex];
+    if (!nextMember || member.hp !== nextMember.hp) return true;
+
+    return member.actions.some((action, actionIndex) => {
+      return action.remaining !== nextMember.actions[actionIndex]?.remaining;
+    });
+  });
 }
 
 function createSaveFileName(playerName: string): string {
@@ -482,6 +513,10 @@ export default function HomePage() {
     updateHistory = true
   ) => {
     if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
+    if (choice.action.type === "use_item") {
+      handleUseItemLocally(choice);
+      return;
+    }
 
     const submittedChoice = applyInspirationToChoice(
       choice,
@@ -549,6 +584,68 @@ export default function HomePage() {
         setError(caught instanceof Error ? caught.message : "행동 처리에 실패했습니다.");
       }
     });
+  };
+
+  const handleUseItemLocally = (choice: ChoiceOption) => {
+    if (!gameState || !statusWindow || choiceSubmitStatus === "submitting") return;
+
+    if (choice.action.type !== "use_item") {
+      handleChoice(choice);
+      return;
+    }
+
+    setPreviousSnapshot(
+      createGameSnapshot({
+        gameState,
+        statusWindow,
+        beats,
+        currentChoices,
+      })
+    );
+    setError(null);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
+    setInspirationArmed(false);
+
+    const normalizedGameState = normalizeGameState(gameState);
+    const result = useItem(
+      normalizedGameState,
+      {
+        itemId: choice.action.itemId,
+        targetIndex: choice.action.targetIndex,
+        inventoryIndex: choice.action.inventoryIndex,
+      },
+      {
+        getNextActions: () => currentChoices.map((currentChoice) => currentChoice.action),
+      }
+    );
+    const itemUseLog = buildItemUseLog(choice, normalizedGameState);
+    const changed = didUseItemChangeState(normalizedGameState, result.newState);
+
+    if (!changed) {
+      setError(result.eventSummary);
+      setBeats((prev) => [
+        ...prev,
+        {
+          id: createId(),
+          role: "user",
+          text: `${itemUseLog} 실패: ${result.eventSummary}`,
+        },
+      ]);
+      return;
+    }
+
+    setGameState(result.newState);
+    setStatusWindow(buildStatusWindow(result.newState));
+    setAttackFxEvent(null);
+    setBeats((prev) => [
+      ...prev,
+      {
+        id: createId(),
+        role: "user",
+        text: itemUseLog,
+      },
+    ]);
   };
 
   const handleRetryChoice = () => {
@@ -724,7 +821,7 @@ export default function HomePage() {
         status={statusWindow}
         inventory={gameState.party.inventory}
         members={gameState.party.members}
-        onUse={handleChoice}
+        onUse={handleUseItemLocally}
         inventoryDisabled={
           choiceSubmitStatus === "submitting" ||
           gameState.phase === "victory" ||

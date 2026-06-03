@@ -10,13 +10,6 @@ export const consumables = [
     hpRestore: 3,
   },
   {
-    id: "smoke-bomb",
-    name: "연막탄",
-    rarity: "common",
-    effectId: "auto_flee",
-    autoFlee: true,
-  },
-  {
     id: "superior-heal-potion",
     name: "상급 회복물약",
     rarity: "rare",

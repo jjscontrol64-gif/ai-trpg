@@ -47,7 +47,6 @@ export type ConsumableDefinition = {
   hpRestore?: number;
   allHpRestore?: number;
   actionRestore?: number;
-  autoFlee?: boolean;
 };
 
 export type ItemEffectContext = {

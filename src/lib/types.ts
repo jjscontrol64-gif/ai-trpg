@@ -44,7 +44,6 @@ export interface ConsumableItem {
   hpRestore?: number;
   allHpRestore?: number;
   actionRestore?: number;
-  autoFlee?: boolean;
 }
 
 export interface SpecialAction {
@@ -193,8 +192,13 @@ export type PlayerAction =
   | { type: "move"; direction: "north" | "south" | "east" | "west" }
   | { type: "attack"; characterIndex: number; useInspiration: boolean }
   | { type: "special_action"; characterIndex: number; actionName: string }
-  | { type: "flee"; useSmokeBomb: boolean }
-  | { type: "use_item"; itemId: string; targetIndex?: number }
+  | { type: "flee" }
+  | {
+      type: "use_item";
+      itemId: string;
+      targetIndex?: number;
+      inventoryIndex?: number;
+    }
   | { type: "rest" }
   | {
       type: "puzzle_attempt";

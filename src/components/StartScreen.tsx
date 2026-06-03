@@ -72,7 +72,7 @@ export default function StartScreen({
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-8" style={{ color: "var(--text-secondary)" }}>
               AI 나레이터와 함께 3층 미궁을 돌파하는 텍스트 기반 던전 탐험.
-              전사를 조작하며 피나, 미나와 함께 각 층의 보스를 무너뜨리고 최하층의
+              전사를 조작하며 에이미, 실루엘라와 함께 각 층의 보스를 무너뜨리고 최하층의
               레드드래곤까지 도달합니다.
             </p>
           </div>
@@ -80,7 +80,7 @@ export default function StartScreen({
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             {[
               ["1d20 판정", "모든 주요 행동은 1d20과 스탯, 영감으로 결정됩니다."],
-              ["3인 파티", "전사, 피나, 미나의 특수액션을 조합해 전투와 탐험을 진행합니다."],
+              ["3인 파티", "전사, 에이미, 실루엘라의 특수액션을 조합해 전투와 탐험을 진행합니다."],
               ["층별 보스", "리치, 발록, 레드드래곤을 쓰러뜨리면 다음 층이 열립니다."],
             ].map(([title, description]) => (
               <div
@@ -186,11 +186,11 @@ export default function StartScreen({
                 <span>HP 10/10 · STR 4</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>피나</span>
+                <span>에이미</span>
                 <span>DEX 4 · 암습/패스파인딩</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>미나</span>
+                <span>실루엘라</span>
                 <span>INT 4 · 마력속박/연금생성</span>
               </div>
               <div className="mt-2 border-t border-white/6 pt-3">
