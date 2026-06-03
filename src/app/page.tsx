@@ -314,36 +314,6 @@ export default function HomePage() {
     }
   }, [gameState]);
 
-  useEffect(() => {
-    if (
-      !gameState ||
-      !playerName ||
-      choiceSubmitStatus !== "idle"
-    ) {
-      return;
-    }
-
-    const snapshot = buildSaveSnapshot(
-      playerName,
-      modelPresetId,
-      gameState,
-      beats,
-      currentChoices
-    );
-
-    setSavedSnapshot(snapshot);
-    storageProvider.save(snapshot).catch(() => {
-      setSaveStatus("error");
-    });
-  }, [
-    beats,
-    choiceSubmitStatus,
-    currentChoices,
-    gameState,
-    modelPresetId,
-    playerName,
-  ]);
-
   const latestAssistantBeat = useMemo(() => {
     return [...beats].reverse().find((beat) => beat.role === "assistant") as
       | Extract<StoryBeat, { role: "assistant" }>
@@ -638,6 +608,22 @@ export default function HomePage() {
     setError(null);
   };
 
+  const handleHome = () => {
+    setGameState(null);
+    setStatusWindow(null);
+    setBeats([]);
+    setCurrentChoices([]);
+    setChoiceSubmitStatus("idle");
+    setLastSubmittedChoice(null);
+    setPreviousSnapshot(null);
+    setInspirationArmed(false);
+    setDrawerOpen(false);
+    setAttackFxEvent(null);
+    setError(null);
+    setSaveStatus("idle");
+    setImportStatus("idle");
+  };
+
   if (!gameState || !statusWindow) {
     return (
       <StartScreen
@@ -658,6 +644,13 @@ export default function HomePage() {
       <header className="topbar panel-shell">
         <h1 className="game-title">{playerName}의 던전 탐험</h1>
         <div className="topbar-actions">
+          <button
+            className="pill"
+            onClick={handleHome}
+            disabled={choiceSubmitStatus === "submitting"}
+          >
+            Home
+          </button>
           <span className="pill">{getModeLabel(gameState.mode)}</span>
           <span className="pill">{getPhaseLabel(gameState.phase)}</span>
           <button className="pill" onClick={handleSave} disabled={isPending}>
@@ -680,7 +673,14 @@ export default function HomePage() {
         </div>
       </header>
 
-      {error ? <div className="play-error">{error}</div> : null}
+      {error ? (
+        <div className="play-error">
+          <span>{error}</span>
+          <button className="pill" type="button" onClick={handleHome}>
+            Home
+          </button>
+        </div>
+      ) : null}
 
       <PartyHud status={statusWindow} onOpenDrawer={() => setDrawerOpen(true)} />
 
