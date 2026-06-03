@@ -136,3 +136,43 @@ describe("combat damage scaling", () => {
     expect(result.state.combat.monster?.hp).toBe(19);
   });
 });
+
+describe("boss counter damage", () => {
+  it("applies floor 2 boss counter damage to the attacker", () => {
+    mockRoll(6);
+    const warrior = createCharacter("Warrior", "warrior", { str: 4, dex: 1, int: 0 });
+    const state = createState(warrior);
+    state.party.floor = 2;
+    state.combat.monster = {
+      name: "Balrog",
+      hp: 28,
+      maxHp: 28,
+      difficulty: "boss",
+      damage: 2,
+    };
+
+    const result = processAttack(state, 0, false);
+
+    expect(result.monsterDamage).toBe(2);
+    expect(result.state.party.members[0].hp).toBe(8);
+  });
+
+  it("applies floor 3 boss normal counter damage to the attacker", () => {
+    mockRoll(6);
+    const warrior = createCharacter("Warrior", "warrior", { str: 4, dex: 1, int: 0 });
+    const state = createState(warrior);
+    state.party.floor = 3;
+    state.combat.monster = {
+      name: "End Dragon",
+      hp: 30,
+      maxHp: 30,
+      difficulty: "boss",
+      damage: 3,
+    };
+
+    const result = processAttack(state, 0, false);
+
+    expect(result.monsterDamage).toBe(3);
+    expect(result.state.party.members[0].hp).toBe(7);
+  });
+});
