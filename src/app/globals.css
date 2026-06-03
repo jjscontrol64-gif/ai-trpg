@@ -479,7 +479,7 @@ a {
 }
 
 /* ===== Play screen — Variant A (adventure) ===== */
-.play{position:relative;min-height:100vh;padding:1.25rem 1rem;display:flex;flex-direction:column;gap:.9rem;max-width:1320px;margin:0 auto;}
+.play{position:relative;min-height:100vh;padding:4rem 1rem 1.25rem;display:flex;flex-direction:column;gap:.9rem;max-width:1320px;margin:0 auto;}
 
 /* top bar */
 .topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem;padding:.85rem 1.2rem;}
@@ -488,6 +488,12 @@ a {
 .pill{border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.15);border-radius:999px;padding:.45rem .9rem;font-size:.72rem;letter-spacing:.12em;color:var(--text-secondary);cursor:pointer;transition:transform .18s ease,border-color .18s ease;}
 .pill:hover:not(:disabled){transform:translateY(-1px);border-color:rgba(215,172,97,0.35);}
 .pill:disabled{opacity:.4;cursor:not-allowed;}
+.bgm-layer{position:fixed;top:1rem;right:1rem;left:auto;z-index:40;transform:none;}
+.bgm-toggle{display:inline-flex;align-items:center;gap:.4rem;}
+.bgm-toggle .bgm-ico{font-size:.95rem;line-height:1;}
+.bgm-toggle .bgm-label{font-size:.72rem;letter-spacing:.12em;}
+.bgm-toggle.is-on{border-color:rgba(215,172,97,0.5);background:rgba(215,172,97,0.16);color:var(--accent-gold);}
+@media (max-width:560px){.bgm-layer{top:.6rem;right:.6rem;}}
 .play-error{display:flex;align-items:center;justify-content:space-between;gap:.75rem;border:1px solid rgba(210,101,87,0.35);background:rgba(210,101,87,0.08);border-radius:1rem;padding:.7rem 1rem;font-size:.85rem;color:var(--text-secondary);}
 .play-error span{min-width:0;line-height:1.6;}
 

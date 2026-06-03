@@ -1,0 +1,24 @@
+/* =======================================================================
+   BGM 토글 UX 개선 — globals.css 의 기존 .bgm-* 규칙 "교체"
+   -----------------------------------------------------------------------
+   대상: src/app/globals.css (대략 line 491~493 의 기존 3줄)
+   아래 기존 규칙을 찾아서 ↓
+       .bgm-layer{position:fixed;top:1rem;left:50%;z-index:40;transform:translateX(-50%);}
+       .bgm-toggle{min-width:6.4rem;}
+       .bgm-toggle.is-on{...}
+   이 블록으로 통째로 바꾼다.
+   ======================================================================= */
+
+/* 전역 유지 + 중앙 → 우상단 코너로 이동 (떠 있는 "임시 요소" 느낌 제거) */
+.bgm-layer{position:fixed;top:1rem;right:1rem;left:auto;z-index:40;transform:none;}
+
+/* 아이콘 + 라벨. ON/OFF 텍스트 전환이 없어 폭이 흔들리지 않으므로 min-width 불필요 */
+.bgm-toggle{display:inline-flex;align-items:center;gap:.4rem;}
+.bgm-toggle .bgm-ico{font-size:.95rem;line-height:1;}
+.bgm-toggle .bgm-label{font-size:.72rem;letter-spacing:.12em;}
+
+/* 켜짐: 금색 강조 (기존 유지) */
+.bgm-toggle.is-on{border-color:rgba(215,172,97,0.5);background:rgba(215,172,97,0.16);color:var(--accent-gold);}
+
+/* 모바일에서 코너 여백 축소 */
+@media (max-width:560px){ .bgm-layer{top:.6rem;right:.6rem;} }

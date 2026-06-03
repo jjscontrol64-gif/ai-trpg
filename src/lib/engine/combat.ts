@@ -251,9 +251,12 @@ export function processSpecialAction(
       break;
     }
     case "암습": {
-      // 몬스터 공격 회피 + 자신 공격은 다이스 판정
+      // 몬스터 공격 회피 + 성공 판정은 대성공으로 승격
       const mainStat = getMainStat(character);
       diceResult = performDiceCheck(character, mainStat, false, s.mode, false);
+      if (diceResult.judgment === "success") {
+        diceResult.judgment = "critical_success";
+      }
       playerDamage = getAttackDamage(diceResult.judgment, diceResult.stat);
       monster.hp = Math.max(0, monster.hp - playerDamage);
       eventLog = `암습! 피나가 그림자에서 공격. ${playerDamage} 데미지. 몬스터 반격 회피.`;
