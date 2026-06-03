@@ -41,7 +41,7 @@ type ResolvedAIModel = {
 const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
 const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
 const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
-const AI_PROMPT_HISTORY_LIMIT = 3;
+const AI_PROMPT_HISTORY_LIMIT = 10;
 const apiKeySessions = new Map<string, ApiKeySession>();
 
 class UnknownAIModelPresetError extends Error {}

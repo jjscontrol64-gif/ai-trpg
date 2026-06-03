@@ -160,6 +160,7 @@ export function buildUserMessage(
 
   msg += `[엔진 결과] ${engineResult.eventSummary}\n`;
   msg += buildCurrentStateReminder(engineResult.newState);
+  msg += buildAffinityReminder(engineResult.newState);
 
   if (engineResult.diceResult) {
     const d = engineResult.diceResult;
@@ -214,6 +215,15 @@ function buildCurrentStateReminder(state: GameState): string {
 - 전투 진행 중: 예
 - ${monsterLabel} HP: ${monster.hp}/${monster.maxHp} (잔여 ${monster.hp})
 - 중요 규칙: 적 HP가 1 이상 남아 있으므로 나레이션에서 전투 종료, 승리, 격파, 다음 층 이동, 엔딩을 선언하지 마세요.
+`;
+}
+
+function buildAffinityReminder(state: GameState): string {
+  const affinity = normalizeAffinity(state.party.affinity);
+  return `\n[현재 관계 상태]
+- 에이미 호감도: ${affinity.pina}/3 (${AFFINITY_MOOD[affinity.pina]})
+- 실루엘라 호감도: ${affinity.mina}/3 (${AFFINITY_MOOD[affinity.mina]})
+- 대사와 반응의 거리감은 현재 호감도를 기준으로 조절하세요. 호감도 수치를 직접 말하지 말고 태도와 말투로만 반영하세요.
 `;
 }
 

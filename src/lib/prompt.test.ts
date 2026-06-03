@@ -5,6 +5,24 @@ import { buildUserMessage } from "./prompt";
 import { EngineResult } from "./types";
 
 describe("buildUserMessage", () => {
+  it("keeps current affinity close to the narration request", () => {
+    const state = createInitialState("Tester", "normal");
+    state.party.affinity = { pina: 2, mina: 1 };
+
+    const engineResult: EngineResult = {
+      newState: state,
+      eventSummary: "The party looks around the room.",
+      nextActions: [{ type: "move", direction: "north" }],
+    };
+
+    const message = buildUserMessage(engineResult);
+
+    expect(message).toContain("[현재 관계 상태]");
+    expect(message).toContain("에이미 호감도: 2/3");
+    expect(message).toContain("실루엘라 호감도: 1/3");
+    expect(message).toContain("호감도 수치를 직접 말하지 말고");
+  });
+
   it("keeps remaining boss HP close to the narration request while combat continues", () => {
     const state = createInitialState("테스터", "normal");
     state.phase = "combat";
