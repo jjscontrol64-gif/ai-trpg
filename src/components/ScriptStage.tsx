@@ -188,14 +188,23 @@ export default function ScriptStage({
       <div ref={logRef} className="narr-scroll">
         {displayMonster ? (
           <div
-            ref={arenaRef}
-            className={`boss sticky-host fx-arena ${
+            className={`boss sticky-host ${
               displayMonster.statusEffect ? "fx-bound-arena" : ""
             } ${
               defeatingMonster ? "boss-defeated" : ""
             }`}
           >
-            <div className="boss-r">
+            <div ref={arenaRef} className="boss-stage fx-arena">
+              <div ref={targetRef} className="fx-target boss-fx-target">
+                <span className="glyph" aria-hidden="true">
+                  💀
+                </span>
+              </div>
+              <div ref={fxLayerRef} className="fx-layer boss-fx-layer" />
+            </div>
+
+            <div className="boss-meta">
+              <div className="boss-r">
               <span className="boss-nm">
                 {displayMonster.level} {displayMonster.name}
               </span>
@@ -203,18 +212,13 @@ export default function ScriptStage({
                 HP {displayMonster.hp} / {displayMonster.maxHp}
               </span>
             </div>
-            <span className="hp-bar boss-bar">
-              <span className="hp-bar-fill hp-low" style={{ width: `${mPct}%` }} />
-            </span>
+              <span className="hp-bar boss-bar">
+                <span className="hp-bar-fill hp-low" style={{ width: `${mPct}%` }} />
+              </span>
+            </div>
             {displayMonster.statusEffect ? (
               <span className="boss-eff">🔗 {displayMonster.statusEffect}</span>
             ) : null}
-            <div ref={targetRef} className="fx-target boss-fx-target">
-              <span className="glyph" aria-hidden="true">
-                💀
-              </span>
-            </div>
-            <div ref={fxLayerRef} className="fx-layer boss-fx-layer" />
           </div>
         ) : null}
 

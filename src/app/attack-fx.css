@@ -35,17 +35,15 @@
 .fx-target.fx-bound{filter:drop-shadow(0 0 12px rgba(121,164,218,.7));}
 .fx-target.fx-bound .glyph{filter:saturate(.6) brightness(.9);}
 
-.boss.fx-arena{position:relative;overflow:hidden;min-height:13.5rem;padding:.85rem 1rem 1.1rem;}
-.boss.fx-arena .boss-r,.boss.fx-arena .boss-bar,.boss.fx-arena .boss-eff{position:relative;z-index:10;}
-.boss.fx-arena .boss-bar{display:block;max-width:24rem;}
+.boss-stage.fx-arena{position:relative;overflow:hidden;}
 .boss.fx-bound-arena{box-shadow:0 0 0 1px rgba(121,164,218,.18),0 0 24px rgba(121,164,218,.28);}
 .boss.boss-defeated{animation:bossDefeatedExit 1.25s ease-in forwards;}
 @keyframes bossDefeatedExit{
   0%,68%{opacity:1;transform:translateY(0) scale(1);filter:saturate(1);}
   100%{opacity:0;transform:translateY(10px) scale(.98);filter:saturate(.45) brightness(.75);}
 }
-.boss-fx-target{position:absolute;left:50%;top:58%;width:1px;height:1px;z-index:4;pointer-events:none;opacity:0;}
-.boss-fx-target .glyph{font-size:3rem;}
+.boss-fx-target{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:100px;height:100px;display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;}
+.boss-fx-target .glyph{font-size:3.5rem;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6));}
 .boss-fx-layer{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;}
 
 /* 데미지 숫자 */

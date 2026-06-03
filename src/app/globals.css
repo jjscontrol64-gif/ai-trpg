@@ -550,14 +550,16 @@ a {
 .scriptline.mt{margin-top:1rem;}
 .beat-summary{margin:.7rem 0 0 calc(84px + .9rem);border-top:1px solid rgba(255,255,255,0.06);padding-top:.7rem;font-size:.82rem;line-height:1.7;color:var(--text-secondary);}
 
-/* boss banner */
-.boss{border:1px solid rgba(196,75,75,0.4);border-radius:1rem;background:linear-gradient(180deg,rgba(120,20,20,0.28),rgba(35,8,8,0.85));padding:.7rem .85rem;margin-bottom:1rem;}
+/* boss battle stage */
+.boss{border:1px solid rgba(196,75,75,0.4);border-radius:.9rem;background:linear-gradient(180deg,rgba(120,20,20,0.3),rgba(35,8,8,0.88));padding:.65rem .8rem;margin-bottom:1rem;}
+.boss-stage{position:relative;height:128px;margin-bottom:.6rem;border-radius:.6rem;overflow:hidden;background:radial-gradient(circle at 50% 42%,rgba(150,28,28,0.3),transparent 64%);}
+.boss-meta{position:relative;z-index:10;}
 .boss-r{display:flex;align-items:center;justify-content:space-between;gap:.6rem;}
-.boss-nm{font-weight:700;color:var(--accent-red);font-size:.82rem;}
-.boss-hpv{font-size:.72rem;color:var(--text-secondary);font-variant-numeric:tabular-nums;}
-.boss .boss-bar{margin-top:.45rem;height:.4rem;}
+.boss-nm{font-weight:700;color:var(--accent-red);font-size:.8rem;}
+.boss-hpv{font-size:.7rem;color:var(--text-secondary);font-variant-numeric:tabular-nums;}
+.boss .boss-bar{display:block;margin-top:.4rem;height:.4rem;}
 .boss .hp-bar-fill{display:block;height:100%;}
-.boss-eff{margin-top:.45rem;display:inline-block;font-size:.64rem;color:var(--accent-gold);background:rgba(0,0,0,0.28);border-radius:999px;padding:.2rem .55rem;}
+.boss-eff{position:relative;z-index:10;margin-top:.4rem;display:inline-block;font-size:.62rem;color:var(--accent-gold);background:rgba(0,0,0,0.28);border-radius:999px;padding:.18rem .5rem;}
 
 /* command menu */
 .cmd{flex:none;width:340px;display:flex;flex-direction:column;}
