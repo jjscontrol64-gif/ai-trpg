@@ -8,7 +8,7 @@ import {
   Affinity,
   AffinityLevel,
 } from "./types";
-import { MAX_PROMPT_ACTIONS } from "./action-options";
+import { DEFAULT_CHOICE_COUNT, MAX_CHOICE_COUNT, MAX_PROMPT_ACTIONS } from "./action-options";
 import { getDirectionLabel } from "./engine/movement";
 import { getEffectiveStat } from "./engine/dice";
 import { normalizeAffinity } from "./state-normalization";
@@ -144,7 +144,9 @@ export function buildSystemPrompt(state: GameState): string {
     { "actionIndex": 1, "label": "⚔️ 에이미 — 키워드", "text": "묘사" },
     { "actionIndex": 2, "label": "🛡️ 실루엘라 — 키워드", "text": "묘사" }
   ]
-}`;
+}
+
+Choice count policy: Return ${DEFAULT_CHOICE_COUNT} choices by default. Use up to ${MAX_CHOICE_COUNT} only when the scene genuinely needs more tactical, social, or exploration branches.`;
 }
 
 export function buildUserMessage(
@@ -200,6 +202,8 @@ export function buildUserMessage(
   } else {
     msg += `\n위 행동들 중에서 3개를 선택지로 만들어주세요. 각 선택지의 actionIndex는 선택한 행동의 actionIndex 값을 그대로 넣어주세요. 나머지는 나레이션에 자연스럽게 녹여주세요.`;
   }
+
+  msg += `\n\n[Choice count policy]\nReturn ${DEFAULT_CHOICE_COUNT} choices by default. Use up to ${MAX_CHOICE_COUNT} only when the scene needs meaningfully different options.`;
 
   return msg;
 }

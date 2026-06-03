@@ -23,6 +23,20 @@ describe("buildUserMessage", () => {
     expect(message).toContain("호감도 수치를 직접 말하지 말고");
   });
 
+  it("includes the current choice count policy", () => {
+    const state = createInitialState("Tester", "normal");
+    const engineResult: EngineResult = {
+      newState: state,
+      eventSummary: "The party looks around the room.",
+      nextActions: [{ type: "move", direction: "north" }],
+    };
+
+    const message = buildUserMessage(engineResult);
+
+    expect(message).toContain("Return 4 choices by default");
+    expect(message).toContain("Use up to 5");
+  });
+
   it("keeps remaining boss HP close to the narration request while combat continues", () => {
     const state = createInitialState("테스터", "normal");
     state.phase = "combat";
