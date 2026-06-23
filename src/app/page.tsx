@@ -138,6 +138,17 @@ async function getGameSessionStatus(): Promise<GameSessionStatus> {
   return response.json() as Promise<GameSessionStatus>;
 }
 
+async function deleteGameSession(): Promise<void> {
+  const response = await fetch("/api/game", {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Game API request failed (${response.status})`);
+  }
+}
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -405,7 +416,8 @@ export default function HomePage() {
     name: string,
     apiKey: string,
     selectedModelPresetId: string,
-    difficulty: DifficultyMode
+    difficulty: DifficultyMode,
+    rememberApiKey: boolean
   ) => {
     startTransition(async () => {
       try {
@@ -416,6 +428,7 @@ export default function HomePage() {
           modelPresetId: selectedModelPresetId,
           difficulty,
           apiKey,
+          rememberApiKey,
         });
 
         setPlayerName(name);
@@ -444,7 +457,11 @@ export default function HomePage() {
     });
   };
 
-  const handleResume = (apiKey: string, selectedModelPresetId: string) => {
+  const handleResume = (
+    apiKey: string,
+    selectedModelPresetId: string,
+    rememberApiKey: boolean
+  ) => {
     if (!savedSnapshot) return;
 
     startTransition(async () => {
@@ -454,6 +471,7 @@ export default function HomePage() {
           type: "configure_api_key",
           modelPresetId: selectedModelPresetId,
           apiKey,
+          rememberApiKey,
         });
 
         setChoiceSubmitStatus("idle");
@@ -786,6 +804,18 @@ export default function HomePage() {
     setImportStatus("idle");
   };
 
+  const handleForgetApiKey = () => {
+    startTransition(async () => {
+      try {
+        setError(null);
+        await deleteGameSession();
+        handleHome();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "API key removal failed.");
+      }
+    });
+  };
+
   if (!gameState || !statusWindow) {
     return (
       <StartScreen
@@ -812,6 +842,13 @@ export default function HomePage() {
             disabled={choiceSubmitStatus === "submitting"}
           >
             Home
+          </button>
+          <button
+            className="pill"
+            onClick={handleForgetApiKey}
+            disabled={choiceSubmitStatus === "submitting" || isPending}
+          >
+            Forget Key
           </button>
           <span className="pill">{getModeLabel(gameState.mode)}</span>
           <span className="pill">{getPhaseLabel(gameState.phase)}</span>

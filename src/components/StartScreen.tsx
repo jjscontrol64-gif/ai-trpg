@@ -9,9 +9,10 @@ interface StartScreenProps {
     name: string,
     apiKey: string,
     modelPresetId: string,
-    difficulty: DifficultyMode
+    difficulty: DifficultyMode,
+    rememberApiKey: boolean
   ) => void;
-  onResume: (apiKey: string, modelPresetId: string) => void;
+  onResume: (apiKey: string, modelPresetId: string, rememberApiKey: boolean) => void;
   onImportSave: (file: File) => void;
   loading: boolean;
   hasSave: boolean;
@@ -44,6 +45,7 @@ export default function StartScreen({
   const [apiKey, setApiKey] = useState("");
   const [modelPresetId, setModelPresetId] = useState(initialModelPresetId);
   const [difficulty, setDifficulty] = useState<DifficultyMode>("normal");
+  const [rememberApiKey, setRememberApiKey] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const selectedModel =
     AI_MODEL_PRESETS.find((preset) => preset.id === modelPresetId) ??
@@ -53,7 +55,7 @@ export default function StartScreen({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && apiKey.trim()) {
-      onStart(name.trim(), apiKey.trim(), selectedModel.id, difficulty);
+      onStart(name.trim(), apiKey.trim(), selectedModel.id, difficulty, rememberApiKey);
     }
   };
 
@@ -122,11 +124,11 @@ export default function StartScreen({
                 {savedPlayerName ?? "Adventurer"}
               </div>
               <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                Select a model and enter its API key to continue. The key is not saved.
+                Select a model and enter its API key to continue.
               </p>
               <button
                 type="button"
-                onClick={() => onResume(apiKey.trim(), selectedModel.id)}
+                onClick={() => onResume(apiKey.trim(), selectedModel.id, rememberApiKey)}
                 disabled={!apiKey.trim() || loading}
                 className="mt-4 w-full rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0"
                 style={{
@@ -324,6 +326,21 @@ export default function StartScreen({
                 Key is sent once to create a secure server session, then reused through an HttpOnly cookie.
               </p>
             </div>
+            <label
+              className="flex items-start gap-3 rounded-[1.2rem] border border-white/8 bg-black/10 px-4 py-3 text-left text-xs leading-5"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <input
+                type="checkbox"
+                checked={rememberApiKey}
+                onChange={(event) => setRememberApiKey(event.target.checked)}
+                disabled={loading}
+                className="mt-1 h-4 w-4 accent-[color:var(--accent-gold)]"
+              />
+              <span>
+                Remember this API key on this device for 30 days. The key is encrypted on the server; only a session cookie is stored in the browser.
+              </span>
+            </label>
             <button
               type="submit"
               disabled={!name.trim() || !apiKey.trim() || loading}
