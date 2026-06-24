@@ -34,7 +34,7 @@ export default function PartyDrawer({
   inventoryDisabled: boolean;
   onSave: () => void;
   onExport: () => void;
-  saveStatus: "idle" | "saved" | "error";
+  saveStatus: "idle" | "saving" | "saved" | "error";
   actionsDisabled: boolean;
 }) {
   useEffect(() => {
@@ -79,11 +79,13 @@ export default function PartyDrawer({
               onClick={onSave}
               disabled={actionsDisabled}
             >
-              {saveStatus === "saved"
-                ? "Saved"
-                : saveStatus === "error"
-                  ? "Save failed"
-                  : "Save"}
+              {saveStatus === "saving"
+                ? "Saving..."
+                : saveStatus === "saved"
+                  ? "Saved"
+                  : saveStatus === "error"
+                    ? "Autosave failed"
+                    : "Save"}
             </button>
             <button
               type="button"

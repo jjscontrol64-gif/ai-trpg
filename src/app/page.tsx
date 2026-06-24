@@ -23,17 +23,21 @@ import { normalizeGameState } from "@/lib/state-normalization";
 import {
   createStorageProvider,
   isSaveSnapshot,
-  SAVE_SCHEMA_VERSION,
   SaveSnapshot,
 } from "@/lib/storage";
+import {
+  buildSaveSnapshot,
+  DEFAULT_SAVE_ID,
+  persistSaveSnapshot,
+} from "@/lib/save-snapshot";
 import { AI_MODEL_PRESETS } from "@/lib/ai/model-presets";
 import { useItem } from "@/lib/use-item";
 
 const storageProvider = createStorageProvider();
-const DEFAULT_SAVE_ID = "default";
 const DEFAULT_MODEL_PRESET_ID = AI_MODEL_PRESETS[0]?.id ?? "gemini-2.5-flash";
 type ChoiceSubmitStatus = "idle" | "submitting" | "failed";
 type SaveImportStatus = "idle" | "imported" | "error";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 type GameSessionStatus =
   | { authenticated: false }
   | {
@@ -233,25 +237,6 @@ function createSaveFileName(playerName: string): string {
   return `ai-trpg-${safePlayerName || "save"}-${date}.json`;
 }
 
-function buildSaveSnapshot(
-  playerName: string,
-  modelPresetId: string,
-  gameState: GameState,
-  beats: StoryBeat[],
-  currentChoices: ChoiceOption[]
-): SaveSnapshot {
-  return {
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    saveId: DEFAULT_SAVE_ID,
-    playerName,
-    modelPresetId,
-    gameState,
-    beats,
-    currentChoices,
-    savedAt: new Date().toISOString(),
-  };
-}
-
 function getPhaseLabel(phase?: GameState["phase"]) {
   switch (phase) {
     case "combat":
@@ -340,13 +325,46 @@ export default function HomePage() {
   const [playerName, setPlayerName] = useState("");
   const [modelPresetId, setModelPresetId] = useState(DEFAULT_MODEL_PRESET_ID);
   const [savedSnapshot, setSavedSnapshot] = useState<SaveSnapshot | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [importStatus, setImportStatus] = useState<SaveImportStatus>("idle");
   const [inspirationArmed, setInspirationArmed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [attackFxEvent, setAttackFxEvent] = useState<AttackFxEvent | null>(null);
   const [healFxEvent, setHealFxEvent] = useState<HealFxEvent | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const saveStatusTimerRef = useRef<number | null>(null);
+
+  const clearSaveStatusTimer = () => {
+    if (saveStatusTimerRef.current === null) return;
+    window.clearTimeout(saveStatusTimerRef.current);
+    saveStatusTimerRef.current = null;
+  };
+
+  const persistSnapshot = async (snapshot: SaveSnapshot): Promise<boolean> => {
+    clearSaveStatusTimer();
+    setSaveStatus("saving");
+
+    const result = await persistSaveSnapshot(storageProvider, snapshot);
+
+    if (result.status === "error") {
+      setSaveStatus("error");
+      return false;
+    }
+
+    setSavedSnapshot(result.snapshot);
+    setSaveStatus("saved");
+    saveStatusTimerRef.current = window.setTimeout(() => {
+      setSaveStatus("idle");
+      saveStatusTimerRef.current = null;
+    }, 1800);
+    return true;
+  };
+
+  useEffect(() => {
+    return () => {
+      clearSaveStatusTimer();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,7 +460,7 @@ export default function HomePage() {
         setInspirationArmed(false);
         setAttackFxEvent(null);
         setHealFxEvent(null);
-        setBeats([
+        const nextBeats: StoryBeat[] = [
           {
             id: createId(),
             role: "assistant",
@@ -450,7 +468,18 @@ export default function HomePage() {
             eventSummary: response.eventSummary,
             diceResult: response.diceResult,
           },
-        ]);
+        ];
+
+        setBeats(nextBeats);
+        await persistSnapshot(
+          buildSaveSnapshot({
+            playerName: name,
+            modelPresetId: selectedModelPresetId,
+            gameState: response.gameState,
+            beats: nextBeats,
+            currentChoices: response.choices,
+          })
+        );
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "게임 시작에 실패했습니다.");
       }
@@ -497,25 +526,15 @@ export default function HomePage() {
     if (!gameState || !playerName) return;
 
     startTransition(async () => {
-      try {
-        setSaveStatus("idle");
-        const snapshot: SaveSnapshot = {
-          ...buildSaveSnapshot(
-            playerName,
-            modelPresetId,
-            gameState,
-            beats,
-            currentChoices
-          ),
-        };
-
-        await storageProvider.save(snapshot);
-        setSavedSnapshot(snapshot);
-        setSaveStatus("saved");
-        window.setTimeout(() => setSaveStatus("idle"), 1800);
-      } catch {
-        setSaveStatus("error");
-      }
+      await persistSnapshot(
+        buildSaveSnapshot({
+          playerName,
+          modelPresetId,
+          gameState,
+          beats,
+          currentChoices,
+        })
+      );
     });
   };
 
@@ -523,13 +542,13 @@ export default function HomePage() {
     if (!gameState || !playerName) return;
 
     const snapshot: SaveSnapshot = {
-      ...buildSaveSnapshot(
+      ...buildSaveSnapshot({
         playerName,
         modelPresetId,
         gameState,
         beats,
-        currentChoices
-      ),
+        currentChoices,
+      }),
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
       type: "application/json",
@@ -560,9 +579,8 @@ export default function HomePage() {
           gameState: normalizeGameState(parsed.gameState),
         };
 
-        await storageProvider.save(snapshot);
-        setSavedSnapshot(snapshot);
-        setImportStatus("imported");
+        const saved = await persistSnapshot(snapshot);
+        setImportStatus(saved ? "imported" : "error");
       } catch {
         setImportStatus("error");
       }
@@ -601,16 +619,18 @@ export default function HomePage() {
     startTransition(async () => {
       try {
         setError(null);
-        if (appendUserBeat) {
-          setBeats((prev) => [
-            ...prev,
-            {
-              id: createId(),
-              role: "user",
-              text: submittedChoice.label,
-            },
-          ]);
-        }
+        const submittedBeats: StoryBeat[] = appendUserBeat
+          ? [
+              ...beats,
+              {
+                id: createId(),
+                role: "user",
+                text: submittedChoice.label,
+              },
+            ]
+          : beats;
+
+        setBeats(submittedBeats);
 
         const response = await postGame<GameResponse>({
           type: "player_action",
@@ -632,8 +652,8 @@ export default function HomePage() {
         setLastSubmittedChoice(null);
         setAttackFxEvent(nextAttackFxEvent);
         setHealFxEvent(null);
-        setBeats((prev) => [
-          ...prev,
+        const nextBeats: StoryBeat[] = [
+          ...submittedBeats,
           {
             id: createId(),
             role: "assistant",
@@ -641,7 +661,18 @@ export default function HomePage() {
             eventSummary: response.eventSummary,
             diceResult: response.diceResult,
           },
-        ]);
+        ];
+
+        setBeats(nextBeats);
+        await persistSnapshot(
+          buildSaveSnapshot({
+            playerName,
+            modelPresetId,
+            gameState: response.gameState,
+            beats: nextBeats,
+            currentChoices: response.choices,
+          })
+        );
       } catch (caught) {
         setChoiceSubmitStatus("failed");
         setError(caught instanceof Error ? caught.message : "행동 처리에 실패했습니다.");
@@ -717,14 +748,25 @@ export default function HomePage() {
     setStatusWindow(buildStatusWindow(result.newState));
     setAttackFxEvent(null);
     setHealFxEvent(createHealFxEvent(normalizedGameState, result.newState, isAllHeal));
-    setBeats((prev) => [
-      ...prev,
+    const nextBeats: StoryBeat[] = [
+      ...beats,
       {
         id: createId(),
         role: "user",
         text: itemUseLog,
       },
-    ]);
+    ];
+
+    setBeats(nextBeats);
+    void persistSnapshot(
+      buildSaveSnapshot({
+        playerName,
+        modelPresetId,
+        gameState: result.newState,
+        beats: nextBeats,
+        currentChoices,
+      })
+    );
   };
 
   const handleRetryChoice = () => {
@@ -753,8 +795,8 @@ export default function HomePage() {
         setChoiceSubmitStatus("idle");
         setAttackFxEvent(null);
         setHealFxEvent(null);
-        setBeats((prev) => [
-          ...prev,
+        const nextBeats: StoryBeat[] = [
+          ...beats,
           {
             id: createId(),
             role: "assistant",
@@ -762,7 +804,18 @@ export default function HomePage() {
             eventSummary: response.eventSummary,
             diceResult: response.diceResult,
           },
-        ]);
+        ];
+
+        setBeats(nextBeats);
+        await persistSnapshot(
+          buildSaveSnapshot({
+            playerName,
+            modelPresetId,
+            gameState: response.gameState,
+            beats: nextBeats,
+            currentChoices: response.choices,
+          })
+        );
       } catch (caught) {
         setChoiceSubmitStatus("failed");
         setError(caught instanceof Error ? caught.message : "대화 생성에 실패했습니다.");
@@ -785,6 +838,15 @@ export default function HomePage() {
     setAttackFxEvent(null);
     setHealFxEvent(null);
     setError(null);
+    void persistSnapshot(
+      buildSaveSnapshot({
+        playerName,
+        modelPresetId,
+        gameState: snapshot.gameState,
+        beats: snapshot.beats,
+        currentChoices: snapshot.currentChoices,
+      })
+    );
   };
 
   const handleHome = () => {
@@ -853,11 +915,13 @@ export default function HomePage() {
           <span className="pill">{getModeLabel(gameState.mode)}</span>
           <span className="pill">{getPhaseLabel(gameState.phase)}</span>
           <button className="pill" onClick={handleSave} disabled={isPending}>
-            {saveStatus === "saved"
-              ? "Saved"
-              : saveStatus === "error"
-                ? "Save failed"
-                : "Save"}
+            {saveStatus === "saving"
+              ? "Saving..."
+              : saveStatus === "saved"
+                ? "Saved"
+                : saveStatus === "error"
+                  ? "Autosave failed"
+                  : "Save"}
           </button>
           <button className="pill" onClick={handleExportSave} disabled={isPending}>
             Export
