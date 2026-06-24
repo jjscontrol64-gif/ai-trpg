@@ -16,18 +16,14 @@ import {
   resolveAIModelPreset,
 } from "@/lib/ai";
 import { MAX_CHOICE_COUNT, mapChoicesToActions, ModelChoice, normalizeActionIndex } from "@/lib/action-options";
+import {
+  ApiKeySessionData,
+  createApiKeySessionStore,
+} from "@/lib/server/api-key-session-store";
 
 type GameNarrationData = {
   narration: string;
   choices: ModelChoice[];
-};
-
-type ApiKeySession = {
-  apiKey: string;
-  modelPresetId: string;
-  provider: AIProviderId;
-  model: string;
-  expiresAt: number;
 };
 
 type ResolvedAIModel = {
@@ -36,27 +32,33 @@ type ResolvedAIModel = {
   modelPresetId: string;
   provider: AIProviderId;
   model: string;
+  expiresAt: number;
+  rememberApiKey: boolean;
 };
 
-const API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
+export const runtime = "nodejs";
+
+const TRANSIENT_API_KEY_SESSION_TTL_MS = 30 * 60 * 1000;
+const REMEMBERED_API_KEY_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const API_KEY_SESSION_COOKIE = "ai_trpg_api_key_session";
 const SECURE_API_KEY_SESSION_COOKIE = "__Host-ai_trpg_api_key_session";
 const AI_PROMPT_HISTORY_LIMIT = 10;
-const apiKeySessions = new Map<string, ApiKeySession>();
+const apiKeySessionStore = createApiKeySessionStore();
 
 class UnknownAIModelPresetError extends Error {}
 
-export function GET(req: NextRequest) {
-  pruneExpiredApiKeySessions();
+export async function GET(req: NextRequest) {
+  await apiKeySessionStore.pruneExpired();
 
-  const session = getApiKeySession(req);
+  const session = await getApiKeySession(req);
   if (!session) {
     const response = NextResponse.json({ authenticated: false });
     deleteApiKeySessionCookies(response);
     return response;
   }
 
-  session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+  session.data.expiresAt = Date.now() + getApiKeySessionTtlMs(session.data.rememberApiKey);
+  await apiKeySessionStore.set(session.id, session.data);
 
   return withApiKeySessionCookie(
     NextResponse.json({
@@ -72,8 +74,26 @@ export function GET(req: NextRequest) {
       modelPresetId: session.data.modelPresetId,
       provider: session.data.provider,
       model: session.data.model,
+      expiresAt: session.data.expiresAt,
+      rememberApiKey: session.data.rememberApiKey,
     }
   );
+}
+
+export async function DELETE(req: NextRequest) {
+  const sessionId =
+    req.cookies.get(getApiKeySessionCookieName(req))?.value ??
+    req.cookies.get(API_KEY_SESSION_COOKIE)?.value ??
+    req.cookies.get(SECURE_API_KEY_SESSION_COOKIE)?.value ??
+    "";
+
+  if (sessionId) {
+    await apiKeySessionStore.delete(sessionId);
+  }
+
+  const response = NextResponse.json({ ok: true });
+  deleteApiKeySessionCookies(response);
+  return response;
 }
 
 export async function POST(req: NextRequest) {
@@ -83,6 +103,7 @@ export async function POST(req: NextRequest) {
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
     const modelPresetId =
       typeof body.modelPresetId === "string" ? body.modelPresetId : "";
+    const rememberApiKey = body.rememberApiKey === true;
 
     if (
       type !== "configure_api_key" &&
@@ -93,7 +114,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown action type" }, { status: 400 });
     }
 
-    const resolvedAIModel = resolveAIModel(req, apiKey, modelPresetId);
+    const resolvedAIModel = await resolveAIModel(
+      req,
+      apiKey,
+      modelPresetId,
+      rememberApiKey
+    );
 
     if (type === "configure_api_key") {
       return withApiKeySessionCookie(
@@ -191,35 +217,42 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function resolveAIModel(
+async function resolveAIModel(
   req: NextRequest,
   apiKey: string,
-  modelPresetId: string
-): ResolvedAIModel {
+  modelPresetId: string,
+  rememberApiKey: boolean
+): Promise<ResolvedAIModel> {
   if (apiKey) {
     const preset = resolveAIModelPreset(modelPresetId);
     if (!preset) {
       throw new UnknownAIModelPresetError();
     }
+    const session = await createApiKeySession(apiKey, preset.id, rememberApiKey);
 
     return {
       apiKey,
-      apiKeySessionId: createApiKeySession(apiKey, preset.id),
+      apiKeySessionId: session.id,
       modelPresetId: preset.id,
       provider: preset.provider,
       model: preset.model,
+      expiresAt: session.data.expiresAt,
+      rememberApiKey: session.data.rememberApiKey,
     };
   }
 
-  const session = getApiKeySession(req);
+  const session = await getApiKeySession(req);
   if (session) {
-    session.data.expiresAt = Date.now() + API_KEY_SESSION_TTL_MS;
+    session.data.expiresAt = Date.now() + getApiKeySessionTtlMs(session.data.rememberApiKey);
+    await apiKeySessionStore.set(session.id, session.data);
     return {
       apiKey: session.data.apiKey,
       apiKeySessionId: session.id,
       modelPresetId: session.data.modelPresetId,
       provider: session.data.provider,
       model: session.data.model,
+      expiresAt: session.data.expiresAt,
+      rememberApiKey: session.data.rememberApiKey,
     };
   }
 
@@ -234,6 +267,8 @@ function resolveAIModel(
     modelPresetId: preset.id,
     provider: preset.provider,
     model: preset.model,
+    expiresAt: 0,
+    rememberApiKey: false,
   };
 }
 
@@ -252,15 +287,15 @@ function withApiKeySessionCookie(
     secure,
     sameSite: "lax",
     path: "/",
-    maxAge: API_KEY_SESSION_TTL_MS / 1000,
+    maxAge: Math.max(1, Math.ceil((resolvedAIModel.expiresAt - Date.now()) / 1000)),
   });
 
   return response;
 }
 
-function getApiKeySession(
+async function getApiKeySession(
   req: NextRequest
-): { id: string; data: ApiKeySession } | null {
+): Promise<{ id: string; data: ApiKeySessionData } | null> {
   const sessionId =
     req.cookies.get(getApiKeySessionCookieName(req))?.value ??
     req.cookies.get(API_KEY_SESSION_COOKIE)?.value ??
@@ -270,9 +305,8 @@ function getApiKeySession(
     return null;
   }
 
-  const session = apiKeySessions.get(sessionId);
-  if (!session || session.expiresAt <= Date.now()) {
-    apiKeySessions.delete(sessionId);
+  const session = await apiKeySessionStore.get(sessionId);
+  if (!session) {
     return null;
   }
 
@@ -295,31 +329,35 @@ function deleteApiKeySessionCookies(response: NextResponse): void {
   response.cookies.delete(SECURE_API_KEY_SESSION_COOKIE);
 }
 
-function createApiKeySession(apiKey: string, modelPresetId: string): string {
-  pruneExpiredApiKeySessions();
+async function createApiKeySession(
+  apiKey: string,
+  modelPresetId: string,
+  rememberApiKey: boolean
+): Promise<{ id: string; data: ApiKeySessionData }> {
+  await apiKeySessionStore.pruneExpired();
   const preset = resolveAIModelPreset(modelPresetId);
   if (!preset) {
     throw new UnknownAIModelPresetError();
   }
 
   const sessionId = crypto.randomUUID();
-  apiKeySessions.set(sessionId, {
+  const data: ApiKeySessionData = {
     apiKey,
     modelPresetId: preset.id,
     provider: preset.provider,
     model: preset.model,
-    expiresAt: Date.now() + API_KEY_SESSION_TTL_MS,
-  });
-  return sessionId;
+    expiresAt: Date.now() + getApiKeySessionTtlMs(rememberApiKey),
+    rememberApiKey,
+  };
+
+  await apiKeySessionStore.set(sessionId, data);
+  return { id: sessionId, data };
 }
 
-function pruneExpiredApiKeySessions(): void {
-  const now = Date.now();
-  for (const [sessionId, session] of apiKeySessions) {
-    if (session.expiresAt <= now) {
-      apiKeySessions.delete(sessionId);
-    }
-  }
+function getApiKeySessionTtlMs(rememberApiKey: boolean): number {
+  return rememberApiKey
+    ? REMEMBERED_API_KEY_SESSION_TTL_MS
+    : TRANSIENT_API_KEY_SESSION_TTL_MS;
 }
 
 function isMissingApiKeyError(error: unknown): boolean {
